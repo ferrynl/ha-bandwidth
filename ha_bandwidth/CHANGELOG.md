@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.3
+
+- Download staat als vlak boven de nullijn en upload eronder. Ontbrekende metingen blijven open en de waarden per tijdvak zijn opvraagbaar.
+
 ## 0.10.2
 
 - IPinfo-resultaten worden per publiek IP opgeslagen en verschijnen direct in IP- en bestemmingstabellen, ook na een herstart.

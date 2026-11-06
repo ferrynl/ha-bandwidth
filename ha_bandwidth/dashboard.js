@@ -188,43 +188,92 @@ function timeline(data) {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
-  const peak = Math.max(1, ...[...values.values(), ...router.values(), ...modem.values()].flatMap(row => [row.rx, row.tx]));
-  const axis = [1, .75, .5, .25, 0].map(fraction => {
+  const sources = [["", values, kind === "compare" ? "HA-server" : ""]];
+  if (kind === "compare") sources.push(["modem-", router, data.router_label], ["cellular-", modem, data.modem_label]);
+  const readings = sources.flatMap(([, series]) => [...series.values()]);
+  const step = Math.max(1, ...readings.flatMap(row => [row.rx, row.tx])) / 5;
+  const above = Math.max(1, Math.ceil(Math.max(...readings.map(row => row.rx)) / step));
+  const below = Math.max(1, Math.ceil(Math.max(...readings.map(row => row.tx)) / step));
+  const width = slots.length * 10;
+  const y = value => 240 * (above - value / step) / (above + below);
+  const graph = svg("svg", {viewBox: "0 0 " + width + " 240", preserveAspectRatio: "none", "aria-hidden": "true"});
+  const axis = [];
+  for (let tick = above; tick >= -below; tick--) {
+    const value = tick * step;
     const label = document.createElement("span");
-    label.textContent = bytes(peak * fraction);
-    return label;
-  });
+    label.textContent = (tick < 0 ? "−" : "") + bytes(Math.abs(value));
+    label.style.top = (100 * y(value) / 240) + "%";
+    axis.push(label);
+    if (tick) graph.append(svg("line", {x1: 0, x2: width, y1: y(value), y2: y(value), class: "plot-grid"}));
+  }
   el("axis").replaceChildren(...axis);
-  el("chart").replaceChildren(...slots.map(([key, tick]) => {
-    const value = values.get(key);
-    const wan = router.get(key);
-    const cellular = modem.get(key);
-    const group = document.createElement("div");
-    group.className = "bucket";
-    const summary = [];
-    if (value) summary.push((kind === "compare" ? "HA " : "") + "Download " + bytes(value.rx) + " / Upload " + bytes(value.tx));
-    if (wan) summary.push(data.router_label + " download " + bytes(wan.rx) + " / upload " + bytes(wan.tx));
-    if (cellular) summary.push(data.modem_label + " download " + bytes(cellular.rx) + " / upload " + bytes(cellular.tx));
-    group.title = key + " · " + (summary.join(" · ") || "Geen meting");
-    if (summary.length) group.tabIndex = 0;
-    group.setAttribute("aria-label", group.title);
-    const columns = document.createElement("div");
-    columns.className = "columns";
-    const series = [["rx", value?.rx], ["tx", value?.tx]];
-    if (kind === "compare") series.push(["modem-rx", wan?.rx], ["modem-tx", wan?.tx],
-      ["cellular-rx", cellular?.rx], ["cellular-tx", cellular?.tx]);
-    for (const [direction, count] of series) {
-      const bar = document.createElement("span");
-      bar.className = "bar " + direction;
-      bar.style.height = (100 * (count ?? 0) / peak) + "%";
-      columns.append(bar);
+  const zero = y(0);
+  for (const [prefix, series] of sources) {
+    for (const [direction, sign] of [["rx", 1], ["tx", -1]]) {
+      const areas = [];
+      const outlines = [];
+      let run = [];
+      // Close each uninterrupted run at zero so missing measurements stay open.
+      const finish = () => {
+        if (!run.length) return;
+        const [firstX, firstY] = run[0];
+        const [lastX, lastY] = run[run.length - 1];
+        const profile = "M" + (firstX - 5) + "," + firstY + " L" + run.join(" ") + " " + (lastX + 5) + "," + lastY;
+        outlines.push(profile);
+        areas.push(profile + " V" + zero + " H" + (firstX - 5) + " Z");
+        run = [];
+      };
+      slots.forEach(([key], index) => {
+        const row = series.get(key);
+        if (row) run.push([index * 10 + 5, y(sign * row[direction])]);
+        else finish();
+      });
+      finish();
+      const color = prefix + direction;
+      graph.append(svg("path", {d: areas.join(" "), class: "plot-area " + color}),
+        svg("path", {d: outlines.join(" "), class: "plot-outline " + color}));
     }
+  }
+  graph.append(svg("line", {x1: 0, x2: width, y1: zero, y2: zero, class: "plot-zero"}));
+  const cursor = svg("line", {y1: 0, y2: 240, class: "plot-cursor", visibility: "hidden"});
+  graph.append(cursor);
+  const details = el("chart-details");
+  const clear = () => {
+    details.textContent = "Wijs een tijdvak aan voor de waarden.";
+    cursor.setAttribute("visibility", "hidden");
+  };
+  clear();
+  const ticks = document.createElement("div");
+  ticks.className = "plot-ticks";
+  const targets = document.createElement("div");
+  targets.className = "plot-targets";
+  slots.forEach(([key, tick], index) => {
+    const summary = sources.flatMap(([, series, label]) => {
+      const row = series.get(key);
+      return row ? [(label ? label + " " : "") + "download " + bytes(row.rx) + " / upload " + bytes(row.tx)] : [];
+    });
+    const caption = key.replace("T", " ") + (period === "day" ? ":00" : "") + " · " +
+      (summary.join(" · ") || "Geen meting");
+    const target = document.createElement("button");
+    target.type = "button";
+    target.setAttribute("aria-label", caption);
+    if (!summary.length) target.tabIndex = -1;
+    const show = () => {
+      const x = index * 10 + 5;
+      cursor.setAttribute("x1", x);
+      cursor.setAttribute("x2", x);
+      cursor.setAttribute("visibility", "visible");
+      details.textContent = caption;
+    };
+    for (const event of ["focus", "pointerenter", "click"]) target.addEventListener(event, show);
+    target.addEventListener("blur", clear);
+    target.addEventListener("pointerleave", () => { if (document.activeElement !== target) clear(); });
+    targets.append(target);
     const label = document.createElement("span");
-    label.className = "tick";
     label.textContent = tick;
-    group.append(columns, label);
-    return group;
-  }));
+    ticks.append(label);
+  });
+  el("chart").replaceChildren(graph, targets, ticks);
 }
 
 function table(rows) {
@@ -613,6 +662,7 @@ function show(data) {
   el("clear").hidden = !source;
   el("empty").hidden = hasData;
   el("chart").parentElement.hidden = !hasData;
+  el("chart-details").hidden = !hasData;
   if (hasData) timeline(data);
   if (!comparing) table(data.rows);
   showDestinations(data);
