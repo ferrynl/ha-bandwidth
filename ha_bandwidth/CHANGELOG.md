@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- Bekende OpenWrt-apparaatnamen staan in de kolom **Domein / apparaat**. Het MAC-adres blijft onder het IP-adres zichtbaar.
+- **Apparaten** bevat een netwerkdiagram met OpenWrt, zichtbare wifi-clients en apparaten waarvan de verbinding onbekend is. Gemeten apparaten zijn aanklikbaar.
+
 ## 0.8.0
 
 - IP-adressen in **Server**, **Apps** en **IP-adressen** tonen de huidige apparaatnaam en het MAC-adres uit OpenWrt, indien bekend.

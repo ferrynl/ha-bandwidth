@@ -70,12 +70,23 @@
     <div class="table-scroll" id="destinations-table" hidden>
       <table>
         <thead><tr>
-          <th scope="col">Domein</th><th scope="col">IP-adres</th><th scope="col">Type adres</th>
+          <th scope="col">Domein / apparaat</th><th scope="col">IP-adres</th><th scope="col">Type adres</th>
           <th scope="col">Protocol</th><th scope="col">Poort wederpartij</th>
           <th scope="col">Download</th><th scope="col">Upload</th><th scope="col">Totaal</th>
         </tr></thead>
         <tbody id="destination-rows"></tbody>
       </table>
+    </div>
+  </section>
+  <section class="card" id="topology-panel" hidden>
+    <h2>Netwerkdiagram</h2>
+    <p id="topology-note"></p>
+    <div class="topology-scroll">
+      <div class="topology">
+        <div class="topology-node">Internet</div>
+        <div class="topology-node topology-router">OpenWrt</div>
+        <ul class="topology-branches" id="topology-branches"></ul>
+      </div>
     </div>
   </section>
   <section class="card history">

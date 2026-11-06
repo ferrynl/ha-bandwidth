@@ -273,11 +273,17 @@ function showDestinations(data) {
   el("destinations-note").textContent = note;
   for (const row of rows) {
     const tr = body.insertRow();
-    const domain = row.domain ? row.domain + " (" + row.evidence + ")" : "Onbekend";
-    tr.insertCell().textContent = domain;
+    const domain = row.domain ? row.domain + " (" + row.evidence + ")" : "";
+    const name = row.router_host?.name || "";
+    tr.insertCell().textContent = [domain, name].filter(Boolean).join(" · ") || "—";
     const ipCell = tr.insertCell();
     ipCell.textContent = row.ip || "Overige verbindingen";
-    addRouterHost(ipCell, row.router_host);
+    if (row.router_host?.mac) {
+      const mac = document.createElement("span");
+      mac.className = "ip-result";
+      mac.textContent = row.router_host.mac;
+      ipCell.append(mac);
+    }
     addIpLookup(ipCell, row.lookup_ip, "destination-rows");
     tr.insertCell().textContent = row.scope;
     tr.insertCell().textContent = row.protocol || "—";
@@ -310,6 +316,68 @@ function showComparison(data) {
   el("modem-status").textContent = data.status.router_error || (!data.status.router_configured
     ? "Stel openwrt_url, openwrt_username en openwrt_password in onder HA-Bandwidth → Configuratie."
     : data.modem_buckets.length ? device : [device, "Nog geen WAN-metingen voor deze periode."].filter(Boolean).join(" "));
+}
+
+function showTopology(data) {
+  const panel = el("topology-panel");
+  panel.hidden = kind !== "device";
+  if (panel.hidden) return;
+
+  const measured = new Map(data.rows.map(row => [row.source, row]));
+  const devices = new Map(data.topology.map(device => [device.source, device]));
+  for (const row of data.rows) {
+    if (!devices.has(row.source)) devices.set(row.source, {source: row.source, name: row.label, ips: [], ssid: ""});
+  }
+
+  const branches = new Map();
+  for (const device of devices.values()) {
+    const label = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
+    if (!branches.has(label)) branches.set(label, []);
+    branches.get(label).push(device);
+  }
+  const container = el("topology-branches");
+  container.replaceChildren();
+  el("topology-note").textContent = devices.size
+    ? "Wifi toont clients die OpenWrt rechtstreeks op een accesspoint ziet. De lijnen bij onbekende verbindingen geven alleen de route via OpenWrt weer."
+    : "Nog geen apparaten beschikbaar uit OpenWrt of voor deze meetperiode.";
+  container.parentElement.parentElement.hidden = devices.size === 0;
+
+  for (const [name, clients] of [...branches].sort(([a], [b]) => tableCollator.compare(a, b))) {
+    const branch = document.createElement("li");
+    const label = document.createElement("strong");
+    label.className = "topology-node";
+    label.textContent = name;
+    const list = document.createElement("ul");
+    list.className = "topology-clients";
+    clients.sort((a, b) => tableCollator.compare(a.name || a.source, b.name || b.source));
+    for (const device of clients) {
+      const row = measured.get(device.source);
+      const item = document.createElement("li");
+      const node = document.createElement(row ? "button" : "span");
+      node.className = "topology-node topology-client";
+      if (row) {
+        node.type = "button";
+        node.setAttribute("aria-pressed", String(device.source === source));
+        node.addEventListener("click", () => {
+          source = device.source;
+          sourceLabel = row.label;
+          load();
+          el("chart-title").scrollIntoView({block: "nearest"});
+        });
+      }
+      const heading = document.createElement("strong");
+      heading.textContent = device.name || device.ips[0] || device.source;
+      const address = document.createElement("small");
+      address.textContent = [...new Set([...device.ips, device.source])].join(" · ");
+      const traffic = document.createElement("small");
+      traffic.textContent = row ? "↓ " + bytes(row.rx) + " · ↑ " + bytes(row.tx) : "Geen meting in deze periode";
+      node.append(heading, address, traffic);
+      item.append(node);
+      list.append(item);
+    }
+    branch.append(label, list);
+    container.append(branch);
+  }
 }
 
 function show(data) {
@@ -351,6 +419,7 @@ function show(data) {
   if (hasData) timeline(data);
   if (!comparing) table(data.rows);
   showDestinations(data);
+  showTopology(data);
   el("shared-section").hidden = kind !== "app" || !(status.shared?.length || status.unavailable?.length);
   el("shared").textContent = status.shared?.join(", ") || "";
   el("unavailable").textContent = status.unavailable?.length

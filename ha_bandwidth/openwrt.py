@@ -124,6 +124,26 @@ class OpenWrt:
         url = ubus_url(self.settings.get("openwrt_url", ""))
         return self.call(url, self.session, "luci-rpc", "getHostHints", {})
 
+    def wireless_links(self):
+        url = ubus_url(self.settings.get("openwrt_url", ""))
+        radios = self.call(url, self.session, "network.wireless", "status", {})
+        links = {}
+        for radio in radios.values():
+            for interface in radio.get("interfaces", []):
+                config = interface.get("config") or {}
+                name = interface.get("ifname")
+                if config.get("mode") != "ap" or not name or not INTERFACE.fullmatch(name):
+                    continue
+                try:
+                    result = self.call(url, self.session, f"hostapd.{name}", "get_clients", {})
+                except (OSError, ValueError):
+                    continue
+                ssid = config.get("ssid") or name
+                for mac, client in result.get("clients", {}).items():
+                    if MAC.fullmatch(mac.lower()) and client.get("assoc"):
+                        links[mac.lower()] = ssid
+        return links
+
     def device_readings(self, hints):
         periods = self.nlbw_query("periods").get("periods")
         if not isinstance(periods, list) or not periods:

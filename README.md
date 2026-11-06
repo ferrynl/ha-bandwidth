@@ -29,6 +29,10 @@ OpenWrt WAN telt verkeer over de gekozen WAN-interface van alle aangesloten appa
 
 Eerder ingestelde cumulatieve Home Assistant-sensoren blijven bruikbaar als `openwrt_url` leeg is. Die historie wordt apart bewaard van de rechtstreekse OpenWrt-metingen.
 
+## Netwerkdiagram
+
+Op **Apparaten** verbindt het diagram internet, OpenWrt en de apparaten die de router kent of waarvoor in de gekozen periode verkeer is gemeten. Wifi-clients die OpenWrt rechtstreeks ziet, worden per SSID gegroepeerd. Bij andere apparaten geeft de lijn alleen de logische route via OpenWrt weer. Het diagram kan de fysieke poort of route via een losse switch, mesh-node of accesspoint niet afleiden. Klik op een gemeten apparaat om de verkeersgrafiek te selecteren.
+
 ## Verkeer per apparaat
 
 Installeer `luci-app-nlbwmon` op OpenWrt en controleer of **Status → Bandwidth Monitor** op de router verkeer toont. De app gebruikt de bestaande OpenWrt-verbinding en leest hetzelfde overzicht als LuCI. Voor een beperkt routeraccount is leestoegang tot `luci-app-nlbwmon` nodig. Apparaatnamen uit OpenWrt worden gebruikt als ze beschikbaar zijn.
