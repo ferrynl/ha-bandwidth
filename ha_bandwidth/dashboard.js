@@ -318,67 +318,159 @@ function showComparison(data) {
     : data.modem_buckets.length ? device : [device, "Nog geen WAN-metingen voor deze periode."].filter(Boolean).join(" "));
 }
 
-let topologySelection = "";
+const map = el("topology-map");
+const viewport = el("topology-viewport");
+const positions = new Map();
+const pointers = new Map();
+let graphData, gesture, openGroup, selectedDevice;
+let nodes = [], edges = [];
+let camera = {x: 480, y: 220, scale: 1};
+let refit = true;
 
-function filterTopology() {
-  const query = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
-  let matches = 0;
-  for (const branch of el("topology-branches").children) {
-    let visible = 0;
-    for (const item of branch.querySelectorAll("[data-search]")) {
-      item.hidden = !item.dataset.search.includes(query);
-      if (!item.hidden) visible++;
-    }
-    branch.hidden = visible === 0;
-    matches += visible;
-  }
-  el("topology-no-match").hidden = matches > 0;
+function svg(tag, attributes = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+  return element;
 }
 
-el("topology-search").addEventListener("input", filterTopology);
+function paintMap() {
+  viewport.setAttribute("transform", `translate(${camera.x} ${camera.y}) scale(${camera.scale})`);
+  for (const {element, point} of nodes) element.setAttribute("transform", `translate(${point.x} ${point.y})`);
+  for (const {line, from, to} of edges) {
+    line.setAttribute("x1", from.x);
+    line.setAttribute("y1", from.y);
+    line.setAttribute("x2", to.x);
+    line.setAttribute("y2", to.y);
+  }
+}
+
+function zoomMap(factor, from, to = from) {
+  const scale = Math.max(.12, Math.min(6, camera.scale * factor));
+  const ratio = scale / camera.scale;
+  camera = {x: to.x - (from.x - camera.x) * ratio, y: to.y - (from.y - camera.y) * ratio, scale};
+  paintMap();
+}
+
+function fitMap() {
+  if (!nodes.length) return;
+  const xs = nodes.map(({point}) => point.x), ys = nodes.map(({point}) => point.y);
+  const left = Math.min(...xs) - 35, right = Math.max(...xs) + 175;
+  const top = Math.min(...ys) - 40, bottom = Math.max(...ys) + 45;
+  const scale = Math.min(1.4, 900 / (right - left), 415 / (bottom - top));
+  camera = {x: 480 - (left + right) * scale / 2, y: 240 - (top + bottom) * scale / 2, scale};
+  paintMap();
+}
+
+function mapPoint(event) {
+  return new DOMPoint(event.clientX, event.clientY).matrixTransform(map.getScreenCTM().inverse());
+}
+
+map.addEventListener("wheel", event => {
+  event.preventDefault();
+  zoomMap(Math.exp(-Math.max(-150, Math.min(150, event.deltaY)) * .003), mapPoint(event));
+}, {passive: false});
+map.addEventListener("pointerdown", event => {
+  if (event.button !== 0) return;
+  const point = mapPoint(event);
+  if (!pointers.size) gesture = {id: event.target.closest("[data-node]")?.dataset.node, start: point, moved: false};
+  else gesture.moved = true;
+  pointers.set(event.pointerId, point);
+  map.setPointerCapture(event.pointerId);
+});
+map.addEventListener("pointermove", event => {
+  const last = pointers.get(event.pointerId);
+  if (!last) return;
+  const point = mapPoint(event);
+  if (pointers.size === 2) {
+    const other = [...pointers].find(([id]) => id !== event.pointerId)[1];
+    const distance = Math.hypot(last.x - other.x, last.y - other.y);
+    const middle = p => ({x: (p.x + other.x) / 2, y: (p.y + other.y) / 2});
+    if (distance) zoomMap(Math.hypot(point.x - other.x, point.y - other.y) / distance, middle(last), middle(point));
+  } else if (pointers.size === 1) {
+    const {start} = gesture;
+    if (gesture.moved || Math.hypot(point.x - start.x, point.y - start.y) > 4) {
+      gesture.moved = true;
+      const node = positions.get(gesture.id);
+      if (node) {
+        node.x += (point.x - last.x) / camera.scale;
+        node.y += (point.y - last.y) / camera.scale;
+      } else {
+        camera.x += point.x - last.x;
+        camera.y += point.y - last.y;
+      }
+      paintMap();
+    }
+  }
+  pointers.set(event.pointerId, point);
+});
+function finishMapGesture(event) {
+  if (!pointers.delete(event.pointerId)) return;
+  if (pointers.size) {
+    gesture.id = "";
+    return;
+  }
+  const {id, moved} = gesture;
+  gesture = null;
+  if (!moved && event.type === "pointerup") nodes.find(node => node.id === id)?.action?.();
+}
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) map.addEventListener(type, finishMapGesture);
+el("topology-zoom-in").onclick = () => zoomMap(1.25, {x: 480, y: 240});
+el("topology-zoom-out").onclick = () => zoomMap(.8, {x: 480, y: 240});
+el("topology-fit").onclick = fitMap;
+el("topology-search").addEventListener("input", () => {
+  refit = true;
+  if (graphData) showTopology(graphData);
+});
 
 function showTopology(data) {
-  const panel = el("topology-panel");
-  panel.hidden = kind !== "device";
-  if (panel.hidden) return;
+  el("topology-panel").hidden = kind !== "device";
+  if (kind !== "device") return;
+  graphData = data;
+  if (pointers.size) return;
 
   const measured = new Map(data.rows.map(row => [row.source, row]));
   const devices = new Map(data.topology.map(device => [device.source, device]));
   for (const row of data.rows) {
     if (!devices.has(row.source)) devices.set(row.source, {source: row.source, name: row.label, ips: [], ssid: ""});
   }
-
-  const branches = new Map();
+  const search = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
+  const groups = new Map();
   for (const device of devices.values()) {
-    const group = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
-    if (!branches.has(group)) branches.set(group, []);
-    branches.get(group).push(device);
+    if (search && ![device.name, device.source, device.ssid, ...device.ips].join(" ").toLocaleLowerCase("nl-NL").includes(search)) continue;
+    const name = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(device);
   }
-  const container = el("topology-branches");
-  const focusedDevice = container.contains(document.activeElement) ? document.activeElement.dataset.device : "";
-  const buttons = new Map();
-  container.replaceChildren();
   el("topology-note").textContent = devices.size
-    ? devices.size + " apparaten · Kies een apparaat voor details."
-    : "Nog geen apparaten beschikbaar uit OpenWrt of voor deze meetperiode.";
-  el("topology-cloud").hidden = devices.size === 0;
-  el("topology-search").hidden = devices.size === 0;
+    ? devices.size + " apparaten · Sleep een knooppunt of de achtergrond. Zoom met het muiswiel of twee vingers."
+    : "Nog geen apparaten beschikbaar.";
+  el("topology-cloud").hidden = !devices.size;
+  el("topology-search").hidden = !devices.size;
+  el("topology-no-match").hidden = groups.size > 0;
+  map.toggleAttribute("hidden", !groups.size);
 
-  function selectDevice(id) {
-    topologySelection = id;
-    const device = devices.get(id);
-    const row = measured.get(id);
+  const focused = document.activeElement?.dataset.node;
+  const edgeLayer = svg("g", {"aria-hidden": "true"});
+  const nodeLayer = svg("g");
+  viewport.replaceChildren(edgeLayer, nodeLayer);
+  nodes = [];
+  edges = [];
+
+  function select(id) {
+    selectedDevice = id;
+    const device = devices.get(id), row = measured.get(id);
     el("topology-detail").hidden = !device;
-    for (const [key, button] of buttons) button.setAttribute("aria-pressed", String(id === key));
+    for (const node of nodes) {
+      if (node.type === "client") node.element.setAttribute("aria-pressed", String(node.id === "device:" + id));
+    }
     if (!device) return;
-    el("topology-device-name").textContent = device.name || device.ips[0] || device.source;
-    el("topology-device-address").textContent = [...new Set([...device.ips, device.source])].join(" · ");
+    el("topology-device-name").textContent = device.name || device.ips[0] || id;
+    el("topology-device-address").textContent = [...new Set([...device.ips, id])].join(" · ");
     el("topology-device-traffic").textContent = row
-      ? "Download " + bytes(row.rx) + " · Upload " + bytes(row.tx)
-      : "Geen meting in deze periode.";
-    const graph = el("topology-graph");
-    graph.hidden = !row;
-    graph.onclick = row ? () => {
+      ? "Download " + bytes(row.rx) + " · Upload " + bytes(row.tx) : "Geen meting in deze periode.";
+    const button = el("topology-graph");
+    button.hidden = !row;
+    button.onclick = row ? () => {
       source = id;
       sourceLabel = row.label;
       load();
@@ -386,35 +478,64 @@ function showTopology(data) {
     } : null;
   }
 
-  for (const [name, clients] of [...branches].sort(([a], [b]) => tableCollator.compare(a, b))) {
-    const branch = document.createElement("li");
-    const label = document.createElement("strong");
-    label.textContent = name + " (" + clients.length + ")";
-    const list = document.createElement("ul");
-    list.className = "topology-clients";
-    clients.sort((a, b) => tableCollator.compare(a.name || a.source, b.name || b.source));
-    for (const device of clients) {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "topology-chip";
-      button.dataset.device = device.source;
-      button.textContent = device.name || device.ips[0] || device.source;
-      button.title = button.textContent;
-      item.dataset.search = [button.textContent, device.source, name, ...device.ips].join(" ").toLocaleLowerCase("nl-NL");
-      button.addEventListener("click", () => selectDevice(topologySelection === device.source ? "" : device.source));
-      buttons.set(device.source, button);
-      item.append(button);
-      list.append(item);
+  function add(id, name, type, x, y, parent, action) {
+    if (!positions.has(id)) positions.set(id, {x, y});
+    const point = positions.get(id);
+    if (parent) {
+      const line = svg("line", {class: "map-edge map-edge-" + type});
+      edgeLayer.append(line);
+      edges.push({line, from: parent, to: point});
     }
-    branch.append(label, list);
-    container.append(branch);
+    const element = svg("g", {class: "map-node map-" + type, "data-node": id, "aria-label": name});
+    if (action) {
+      element.setAttribute("role", "button");
+      element.setAttribute("tabindex", "0");
+      element.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          action();
+        }
+      });
+    }
+    const title = svg("title");
+    title.textContent = name;
+    const marker = type === "client" ? svg("circle", {r: 8}) : svg("rect", {x: -12, y: -12, width: 24, height: 24, rx: 6});
+    const label = svg("text", {x: 17, y: 4});
+    label.textContent = name.length > 24 ? name.slice(0, 23) + "…" : name;
+    element.append(title, marker, label);
+    nodeLayer.append(element);
+    nodes.push({id, type, element, point, action});
+    return point;
   }
-  selectDevice(topologySelection);
-  filterTopology();
-  if (focusedDevice) buttons.get(focusedDevice)?.focus({preventScroll: true});
-}
 
+  if (groups.size) {
+    const internet = add("internet", "Internet", "internet", 0, -150);
+    const router = add("router", "OpenWrt", "router", 0, 0, internet);
+    [...groups].sort(([a], [b]) => tableCollator.compare(a, b)).forEach(([name, clients], index) => {
+      const id = "group:" + name;
+      const open = Boolean(search) || openGroup === id;
+      const group = add(id, name + " (" + clients.length + ")", "group", (index - (groups.size - 1) / 2) * 285, 140, router,
+        search ? null : () => {
+          openGroup = openGroup === id ? null : id;
+          refit = true;
+          showTopology(graphData);
+        });
+      if (!search) nodes.at(-1).element.setAttribute("aria-expanded", String(open));
+      if (!open) return;
+      clients.sort((a, b) => tableCollator.compare(a.name || a.source, b.name || b.source));
+      const columns = Math.ceil(Math.sqrt(clients.length));
+      clients.forEach((client, i) => add("device:" + client.source, client.name || client.ips[0] || client.source, "client",
+        group.x + (i % columns - (columns - 1) / 2) * 170, group.y + 75 + Math.floor(i / columns) * 47,
+        group, () => select(client.source)));
+    });
+  }
+  select(selectedDevice);
+  if (refit && nodes.length) {
+    fitMap();
+    refit = false;
+  } else paintMap();
+  if (focused) nodes.find(node => node.id === focused)?.element.focus({preventScroll: true});
+}
 
 function show(data) {
   const status = data.status;

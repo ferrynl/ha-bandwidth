@@ -83,8 +83,14 @@
     <p id="topology-note"></p>
     <input id="topology-search" class="table-filter" type="search" placeholder="Zoek op naam, IP of MAC…" aria-label="Zoek in de apparatenwolk">
     <div class="topology-cloud" id="topology-cloud">
-      <div class="topology-route"><span>Internet</span><span aria-hidden="true">↔</span><strong>OpenWrt</strong></div>
-      <ul class="topology-branches" id="topology-branches"></ul>
+      <div class="map-controls" role="group" aria-label="Zoomen op de netwerkkaart">
+        <button type="button" id="topology-zoom-out" aria-label="Uitzoomen">−</button>
+        <button type="button" id="topology-zoom-in" aria-label="Inzoomen">+</button>
+        <button type="button" id="topology-fit">Alles in beeld</button>
+      </div>
+      <svg id="topology-map" viewBox="0 0 960 480" aria-label="Interactieve netwerkkaart">
+        <g id="topology-viewport"></g>
+      </svg>
       <p id="topology-no-match" hidden>Geen apparaten gevonden.</p>
     </div>
     <div id="topology-detail" class="topology-detail" hidden>

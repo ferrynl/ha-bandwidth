@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+
+- Interactieve netwerkkaart met versleepbare knooppunten, zoom, verschuiven, zoeken en uitklapbare apparaatgroepen.
+
 ## 0.9.1
 
 - Compacte apparatenwolk met zoekveld, gegroepeerd per wifi-netwerk of onbekende verbinding.

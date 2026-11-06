@@ -35,18 +35,17 @@ button:hover,button[aria-pressed=true]{background:#2b4667;border-color:var(--rx)
 .bar{display:block;width:35%;max-width:32px;border-radius:3px 3px 0 0}.bar.rx{background:var(--rx)}.bar.tx{background:var(--tx)}
 .tick{font-size:.72rem;color:var(--muted);white-space:nowrap}
 .table-scroll{overflow:auto}
- .topology-cloud{padding:.65rem;background:radial-gradient(ellipse at top,#233b58,#17283d);border:1px solid #456682;border-radius:1.4rem}
-.topology-route{display:flex;justify-content:center;align-items:center;gap:.55rem;color:var(--muted);font-size:.86rem}
-.topology-route strong{color:var(--text)}
-.topology-route::after{content:"";position:absolute;top:100%;left:50%;height:.55rem;border-left:1px solid #7098bd}
-.topology-route{position:relative}
-.topology-branches,.topology-clients{list-style:none;margin:0;padding:0}
-.topology-branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:.55rem;margin-top:.55rem}
-.topology-branches>li{min-width:0;padding:.5rem .6rem;border:1px solid #456682;border-radius:1rem;background:#192b42}
-.topology-branches>li>strong{display:block;margin-bottom:.35rem;font-size:.8rem;color:var(--muted)}
-.topology-clients{display:flex;flex-wrap:wrap;gap:.25rem .35rem}
-.topology-clients>li{min-width:0;max-width:100%}
-.topology-chip{display:block;max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:.2rem .48rem;border-radius:999px;font-size:.79rem}
+ .topology-cloud{position:relative;overflow:hidden;background:radial-gradient(ellipse,#182a40,#0c1520);border:1px solid #456682;border-radius:1rem}
+.map-controls{position:absolute;z-index:1;right:.5rem;top:.5rem;display:flex;gap:.35rem}
+.map-controls button{padding:.25rem .55rem}
+#topology-map{display:block;width:100%;height:clamp(24rem,58vh,44rem);touch-action:none;cursor:grab;user-select:none}
+#topology-map:active{cursor:grabbing}
+.map-edge{stroke:#8298af;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.map-edge-client{stroke:#d6a658;stroke-dasharray:5 4}
+.map-node text{fill:var(--text);font-size:13px;paint-order:stroke;stroke:#101a26;stroke-width:3px;stroke-linejoin:round}
+.map-node rect{fill:#32a1d3}.map-internet rect{fill:#8fa9c3}.map-group rect{fill:#f4a52a}.map-client circle{fill:#24c2aa}
+.map-node[role=button]{cursor:pointer}
+.map-node[aria-pressed=true] circle,.map-node:focus-visible :is(circle,rect){stroke:#fff;stroke-width:2px}
 .topology-detail{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem .7rem;margin-top:.5rem;padding:.5rem .65rem;border:1px solid #456682;border-radius:.75rem;font-size:.85rem}
 .topology-detail span{color:var(--muted);overflow-wrap:anywhere}
 #topology-no-match{margin:.4rem 0 0;text-align:center}
