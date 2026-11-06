@@ -126,23 +126,67 @@ class OpenWrt:
 
     def wireless_links(self):
         url = ubus_url(self.settings.get("openwrt_url", ""))
-        radios = self.call(url, self.session, "network.wireless", "status", {})
-        links = {}
+
+        def optional(obj, method, params):
+            try:
+                return self.call(url, self.session, obj, method, params)
+            except (OSError, ValueError):
+                return {}
+
+        radios = optional("network.wireless", "status", {})
+        interfaces = {}
         for radio in radios.values():
             for interface in radio.get("interfaces", []):
                 config = interface.get("config") or {}
                 name = interface.get("ifname")
-                if config.get("mode") != "ap" or not name or not INTERFACE.fullmatch(name):
-                    continue
-                try:
-                    result = self.call(url, self.session, f"hostapd.{name}", "get_clients", {})
-                except (OSError, ValueError):
-                    continue
-                ssid = config.get("ssid") or name
-                for mac, client in result.get("clients", {}).items():
-                    if MAC.fullmatch(mac.lower()) and client.get("assoc"):
-                        links[mac.lower()] = ssid
+                if name and INTERFACE.fullmatch(name) and config.get("mode") in (None, "ap"):
+                    interfaces[name] = (config.get("ssid"), (radio.get("config") or {}).get("band"))
+        for name in optional("iwinfo", "devices", {}).get("devices", []):
+            if isinstance(name, str) and INTERFACE.fullmatch(name):
+                interfaces.setdefault(name, (None, None))
+
+        links = {}
+        for name, (ssid, band) in interfaces.items():
+            params = {"device": name}
+            info = optional("iwinfo", "info", params)
+            if info.get("mode") not in (None, "Master", "AP"):
+                continue
+            hostapd = optional(f"hostapd.{name}", "get_clients", {})
+            freq = info.get("frequency") or hostapd.get("freq")
+            if isinstance(freq, int):
+                if 2400 <= freq < 2500:
+                    band = "2g"
+                elif 4900 <= freq < 5925:
+                    band = "5g"
+                elif 5925 <= freq < 7125:
+                    band = "6g"
+            label = {"2g": "Wifi 2,4 GHz", "5g": "Wifi 5 GHz", "6g": "Wifi 6 GHz"}.get(band, "Wifi · band onbekend")
+            ssid = info.get("ssid") or ssid or ""
+            stations = optional("iwinfo", "assoclist", params).get("results", [])
+            macs = [station.get("mac", "") for station in stations if isinstance(station, dict)]
+            macs.extend(mac for mac, client in hostapd.get("clients", {}).items() if client.get("assoc") is not False)
+            for mac in macs:
+                if isinstance(mac, str) and MAC.fullmatch(mac.lower()):
+                    links[mac.lower()] = {"connection": label, "ssid": ssid}
         return links
+
+    def lan_links(self):
+        url = ubus_url(self.settings.get("openwrt_url", ""))
+        result = self.call(url, self.session, "file", "exec", {
+            "command": "/usr/sbin/bridge", "params": ["-j", "fdb", "show"],
+        })
+        if result.get("code") != 0:
+            return {}
+        ports = {}
+        for row in json.loads(result.get("stdout", "[]")):
+            mac = str(row.get("mac", "")).lower()
+            port = str(row.get("dev", ""))
+            if (MAC.fullmatch(mac) and re.fullmatch(r"lan[0-9]+", port)
+                    and row.get("master") and row.get("state") not in ("permanent", "static")
+                    and "self" not in row.get("flags", [])):
+                ports.setdefault(mac, set()).add(port)
+        return {mac: {"connection": "Via LAN-poort", "port": next(iter(names))}
+                for mac, names in ports.items() if len(names) == 1}
 
     def device_readings(self, hints):
         periods = self.nlbw_query("periods").get("periods")

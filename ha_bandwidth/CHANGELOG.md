@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4
+
+- Plaats OpenWrt centraal en verdeel alle apparaten rondom de router. Groepen zijn standaard open.
+- Toon wifi per frequentieband via iwinfo of hostapd. Toon een LAN-poort als de bridge-tabel die bevestigt.
+
 ## 0.9.2
 
 - Interactieve netwerkkaart met versleepbare knooppunten, zoom, verschuiven, zoeken en uitklapbare apparaatgroepen.

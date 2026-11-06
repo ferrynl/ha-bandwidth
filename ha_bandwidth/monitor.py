@@ -34,7 +34,7 @@ SETTINGS = json.loads(OPTIONS.read_text(encoding="utf-8")) if OPTIONS.exists() e
 ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
 STATUS = {}
 ROUTER_HOSTS = {}
-ROUTER_WIFI = {}
+ROUTER_LINKS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
@@ -181,7 +181,7 @@ def record(now, rows, prune, destinations=()):
 
 
 def collect():
-    global STATUS, ROUTER_HOSTS, ROUTER_WIFI
+    global STATUS, ROUTER_HOSTS, ROUTER_LINKS
     previous, capture, last_day = {}, None, None
     app_destinations = AppDestinations()
     track_apps = SETTINGS.get("track_app_destinations", True)
@@ -246,13 +246,14 @@ def collect():
                 else:
                     device_error = host_hints_error = router_error
             ROUTER_HOSTS = hosts_by_ip(hints, SETTINGS.get("openwrt_url", "")) if openwrt else {}
-            wifi = {}
+            links = {}
             if openwrt and openwrt.session:
-                try:
-                    wifi = openwrt.wireless_links()
-                except (OSError, ValueError, http.client.HTTPException):
-                    pass
-            ROUTER_WIFI = wifi
+                for read_links in (openwrt.lan_links, openwrt.wireless_links):
+                    try:
+                        links.update(read_links())
+                    except (OSError, ValueError, http.client.HTTPException):
+                        pass
+            ROUTER_LINKS = links
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -298,7 +299,7 @@ def period_bounds(day, period):
     return day.replace(month=1, day=1), date(day.year + 1, 1, 1)
 
 
-def router_topology(hosts, wifi, router_url):
+def router_topology(hosts, links, router_url):
     devices = {}
     try:
         router = str(ipaddress.ip_address(urlsplit(router_url).hostname))
@@ -309,11 +310,11 @@ def router_topology(hosts, wifi, router_url):
         mac = host["mac"]
         if ip == router or (router_mac and mac == router_mac):
             continue
-        device = devices.setdefault(mac or ip, {"name": host["name"], "ips": [], "ssid": wifi.get(mac, "")})
+        device = devices.setdefault(mac or ip, {"name": host["name"], "ips": [], **links.get(mac, {})})
         device["ips"].append(ip)
-    for mac, ssid in wifi.items():
+    for mac, link in links.items():
         if mac != router_mac:
-            devices.setdefault(mac, {"name": "", "ips": [], "ssid": ssid})
+            devices.setdefault(mac, {"name": "", "ips": [], **link})
     return [dict(device, source=key) for key, device in devices.items()]
 
 
@@ -392,7 +393,7 @@ def report(day, period, kind, source):
         "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
-        "topology": router_topology(router_hosts, ROUTER_WIFI, SETTINGS.get("openwrt_url", ""))
+        "topology": router_topology(router_hosts, ROUTER_LINKS, SETTINGS.get("openwrt_url", ""))
                     if kind == "device" else [],
     }
 

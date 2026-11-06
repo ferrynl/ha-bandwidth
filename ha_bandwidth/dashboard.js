@@ -322,7 +322,8 @@ const map = el("topology-map");
 const viewport = el("topology-viewport");
 const positions = new Map();
 const pointers = new Map();
-let graphData, gesture, openGroup, selectedDevice;
+const collapsedGroups = new Set();
+let graphData, gesture, selectedDevice;
 let nodes = [], edges = [];
 let camera = {x: 480, y: 220, scale: 1};
 let refit = true;
@@ -436,8 +437,8 @@ function showTopology(data) {
   const search = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
   const groups = new Map();
   for (const device of devices.values()) {
-    if (search && ![device.name, device.source, device.ssid, ...device.ips].join(" ").toLocaleLowerCase("nl-NL").includes(search)) continue;
-    const name = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
+    if (search && ![device.name, device.source, device.ssid, device.connection, device.port, ...device.ips].join(" ").toLocaleLowerCase("nl-NL").includes(search)) continue;
+    const name = device.connection || "Aansluiting niet gemeten";
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(device);
   }
@@ -465,7 +466,7 @@ function showTopology(data) {
     }
     if (!device) return;
     el("topology-device-name").textContent = device.name || device.ips[0] || id;
-    el("topology-device-address").textContent = [...new Set([...device.ips, id])].join(" · ");
+    el("topology-device-address").textContent = [...new Set([...device.ips, id])].join(" · ") + (device.connection ? " · " + [device.connection, device.ssid, device.port].filter(Boolean).join(" · ") : "");
     el("topology-device-traffic").textContent = row
       ? "Download " + bytes(row.rx) + " · Upload " + bytes(row.tx) : "Geen meting in deze periode.";
     const button = el("topology-graph");
@@ -509,24 +510,38 @@ function showTopology(data) {
   }
 
   if (groups.size) {
-    const internet = add("internet", "Internet", "internet", 0, -150);
+    const internet = add("internet", "Internet", "internet", 0, -105);
     const router = add("router", "OpenWrt", "router", 0, 0, internet);
-    [...groups].sort(([a], [b]) => tableCollator.compare(a, b)).forEach(([name, clients], index) => {
+    const branches = [...groups].sort(([a], [b]) => tableCollator.compare(a, b));
+    const sector = 2 * Math.PI / branches.length;
+    branches.forEach(([name, clients], index) => {
       const id = "group:" + name;
-      const open = Boolean(search) || openGroup === id;
-      const group = add(id, name + " (" + clients.length + ")", "group", (index - (groups.size - 1) / 2) * 285, 140, router,
-        search ? null : () => {
-          openGroup = openGroup === id ? null : id;
+      const open = Boolean(search) || !collapsedGroups.has(id);
+      const center = Math.PI / 2 + index * sector;
+      const radius = branches.length === 1 ? 105 : 195;
+      const group = add(id, name + " (" + clients.length + ")", "group",
+        Math.cos(center) * radius, Math.sin(center) * radius, router, search ? null : () => {
+          if (collapsedGroups.has(id)) collapsedGroups.delete(id);
+          else collapsedGroups.add(id);
           refit = true;
           showTopology(graphData);
         });
       if (!search) nodes.at(-1).element.setAttribute("aria-expanded", String(open));
       if (!open) return;
       clients.sort((a, b) => tableCollator.compare(a.name || a.source, b.name || b.source));
-      const columns = Math.ceil(Math.sqrt(clients.length));
-      clients.forEach((client, i) => add("device:" + client.source, client.name || client.ips[0] || client.source, "client",
-        group.x + (i % columns - (columns - 1) / 2) * 170, group.y + 75 + Math.floor(i / columns) * 47,
-        group, () => select(client.source)));
+      let offset = 0;
+      for (let ring = 0; offset < clients.length; ring++) {
+        const distance = 330 + ring * 125;
+        const span = sector * .82;
+        const count = Math.min(clients.length - offset, Math.max(1, Math.floor(span * distance / 185)));
+        for (let i = 0; i < count; i++) {
+          const client = clients[offset + i];
+          const angle = center + span * ((i + .5) / count - .5);
+          add("device:" + client.source, client.name || client.ips[0] || client.source, "client",
+            Math.cos(angle) * distance, Math.sin(angle) * distance, group, () => select(client.source));
+        }
+        offset += count;
+      }
     });
   }
   select(selectedDevice);
