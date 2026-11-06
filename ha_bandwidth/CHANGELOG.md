@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+
+- Optionele rechtstreekse Zyxel-uitlezing via `Traffic_Status` voor Cellular WAN 1 en 2.
+- Houd de beginstanden per interface apart, zodat een tellerreset geen verkeer van de andere interface weggooit.
+
 ## 0.9.9
 
 - Maak onderscheid tussen ongewijzigde Zyxel-tellers en werkelijk gemeten verkeer.

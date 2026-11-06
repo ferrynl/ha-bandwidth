@@ -23,7 +23,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
-from modem import modem_reading
+from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
@@ -199,7 +199,9 @@ def collect():
     app_destinations = AppDestinations()
     track_apps = SETTINGS.get("track_app_destinations", True)
     openwrt = OpenWrt(SETTINGS) if OPENWRT_ENABLED else None
-    modem_configured = any(SETTINGS.get(key, "").strip() for key in
+    zyxel = DirectZyxel(SETTINGS) if SETTINGS.get("zyxel_direct", False) else None
+    modem_source = "Zyxel direct" if zyxel else "Zyxel via Home Assistant"
+    modem_configured = bool(zyxel) or any(SETTINGS.get(key, "").strip() for key in
                            ("modem_download_entity", "modem_upload_entity"))
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         while True:
@@ -244,13 +246,16 @@ def collect():
                     router_error = str(error)
             if modem_configured:
                 try:
-                    readings.append(modem_reading(SETTINGS))
+                    if zyxel:
+                        readings.extend(zyxel.readings())
+                    else:
+                        readings.append(modem_reading(SETTINGS))
                 except (OSError, URLError, ValueError, http.client.HTTPException) as error:
                     modem_error = str(error)
             if openwrt:
                 log_health(health, "OpenWrt WAN", router_error, f"verbinding actief op {openwrt.device}")
             if modem_configured:
-                log_health(health, "Zyxel via Home Assistant", modem_error)
+                log_health(health, modem_source, modem_error)
             log_health(health, "Docker", "" if containers is not None else "statistieken niet bereikbaar")
             device_error, host_hints_error = "", ""
             hints = {}
@@ -301,17 +306,18 @@ def collect():
                 last_day = now.date()
                 log_health(health, "Opslag", success="metingen worden opgeslagen")
                 if modem_configured and not modem_error:
-                    modem_delta = next((row for row in rows if row[0] == "modem"), None)
-                    if modem_delta is None:
+                    modem_deltas = [row for row in rows if row[0] == "modem"]
+                    if not modem_deltas:
                         phase = "beginstand gelezen, wacht op volgende meting"
-                    elif not any(modem_delta[-2:]):
-                        phase = "sensoren uitgelezen, maar tellers zijn sinds de vorige meting niet veranderd"
+                    elif not any(rx or tx for _, _, _, rx, tx in modem_deltas):
+                        phase = "tellers uitgelezen, maar deze zijn sinds de vorige meting niet veranderd"
                     else:
                         phase = "verkeer gemeten"
                     if modem_phase != phase:
-                        _, _, entities, _, rx, tx = next(item for item in readings if item[1] == "modem")
-                        logging.info("Zyxel: %s; sensorstanden: %s ontvangen=%s B verzonden=%s B",
-                                     phase, entities, rx, tx)
+                        for _, kind, source, _, rx, tx in readings:
+                            if kind == "modem":
+                                logging.info("Zyxel: %s; tellerstand %s: ontvangen=%s B verzonden=%s B",
+                                             phase, source, rx, tx)
                     modem_phase = phase
                 else:
                     modem_phase = ""

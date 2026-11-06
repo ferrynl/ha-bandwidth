@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.9.9"
+version: "0.10.0"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -26,6 +26,10 @@ options:
   ipinfo_token: ""
   upstream_modem_name: ""
   upstream_modem_ip: ""
+  zyxel_direct: false
+  zyxel_username: ""
+  zyxel_password: ""
+  zyxel_allow_unverified_tls: false
   openwrt_url: ""
   openwrt_username: root
   openwrt_password: ""
@@ -40,6 +44,10 @@ schema:
   ipinfo_token: password
   upstream_modem_name: str
   upstream_modem_ip: str
+  zyxel_direct: bool
+  zyxel_username: str
+  zyxel_password: password
+  zyxel_allow_unverified_tls: bool
   openwrt_url: str
   openwrt_username: str
   openwrt_password: password
