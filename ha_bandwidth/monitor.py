@@ -4,6 +4,7 @@ import ipaddress
 import http.client
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import shutil
 import socket
@@ -180,9 +181,21 @@ def record(now, rows, prune, destinations=()):
             db.execute("DELETE FROM app_destinations WHERE day < ?", (cutoff,))
 
 
+def log_health(history, name, error="", success="verbinding en uitlezing werken"):
+    if name in history and history[name] == error:
+        return
+    history[name] = error
+    if error:
+        logging.warning("%s: %s", name, error)
+    else:
+        logging.info("%s: %s", name, success)
+
+
 def collect():
     global STATUS, ROUTER_HOSTS, ROUTER_LINKS
     previous, capture, last_day = {}, None, None
+    health = {}
+    modem_phase = ""
     app_destinations = AppDestinations()
     track_apps = SETTINGS.get("track_app_destinations", True)
     openwrt = OpenWrt(SETTINGS) if OPENWRT_ENABLED else None
@@ -234,6 +247,11 @@ def collect():
                     readings.append(modem_reading(SETTINGS))
                 except (OSError, URLError, ValueError, http.client.HTTPException) as error:
                     modem_error = str(error)
+            if openwrt:
+                log_health(health, "OpenWrt WAN", router_error, f"verbinding actief op {openwrt.device}")
+            if modem_configured:
+                log_health(health, "Zyxel via Home Assistant", modem_error)
+            log_health(health, "Docker", "" if containers is not None else "statistieken niet bereikbaar")
             device_error, host_hints_error = "", ""
             hints = {}
             if openwrt:
@@ -248,6 +266,9 @@ def collect():
                         device_error = str(error)
                 else:
                     device_error = host_hints_error = router_error
+            if openwrt:
+                log_health(health, "OpenWrt apparaatmetingen", device_error)
+                log_health(health, "OpenWrt apparaatnamen", host_hints_error)
             ROUTER_HOSTS = hosts_by_ip(hints, SETTINGS.get("openwrt_url", "")) if openwrt else {}
             links = {}
             if openwrt and openwrt.session:
@@ -274,8 +295,16 @@ def collect():
             try:
                 record(now, rows, now.date() != last_day, destinations + host_destinations)
                 last_day = now.date()
+                log_health(health, "Opslag", success="metingen worden opgeslagen")
+                if modem_configured and not modem_error:
+                    phase = "meting opgeslagen" if any(row[0] == "modem" for row in rows) else "beginstand gelezen, wacht op volgende meting"
+                    if modem_phase != phase:
+                        logging.info("Zyxel: %s", phase)
+                    modem_phase = phase
+                else:
+                    modem_phase = ""
             except sqlite3.Error as error:
-                logging.exception("Meting kon niet worden opgeslagen")
+                log_health(health, "Opslag", str(error))
                 errors.append(f"Opslag: {error}")
             STATUS = {
                 "interface": interface, "updated": now.isoformat(), "errors": errors,
@@ -488,12 +517,14 @@ class Dashboard(BaseHTTPRequestHandler):
         self.reply((ROOT / file).read_bytes(), content_type)
 
     def download_backup(self, previous):
+        logging.info("Back-up: download aangevraagd (%s)", "herstelkopie" if previous else "nieuwe back-up")
         with tempfile.TemporaryDirectory(dir=DATA) as directory:
             target = Path(directory) / "bandwidth.sqlite3"
             try:
                 if previous:
                     with BACKUP_LOCK:
                         if not PREVIOUS_BACKUP.exists():
+                            logging.warning("Back-up: geen herstelkopie beschikbaar")
                             self.send_error(404, "No previous backup")
                             return
                         shutil.copyfile(PREVIOUS_BACKUP, target)
@@ -513,7 +544,12 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             with target.open("rb") as source:
-                shutil.copyfileobj(source, self.wfile)
+                try:
+                    shutil.copyfileobj(source, self.wfile)
+                except OSError:
+                    logging.warning("Back-up: download afgebroken")
+                    return
+            logging.info("Back-up: %s verzonden (%s bytes)", tag, target.stat().st_size)
 
     def do_POST(self):
         if self.client_address[0] != "172.30.32.2" or self.headers.get("X-HA-Bandwidth-Restore") != "1":
@@ -523,6 +559,7 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         self.connection.settimeout(30)
+        logging.info("Herstel: upload gestart")
         try:
             with tempfile.TemporaryDirectory(dir=DATA) as directory:
                 target = Path(directory) / "upload.sqlite3"
@@ -540,6 +577,7 @@ class Dashboard(BaseHTTPRequestHandler):
             logging.exception("Back-up terugzetten is mislukt")
             self.send_json_error(500, "Het terugzetten of opslaan van de herstelkopie is mislukt.")
             return
+        logging.info("Herstel: database teruggezet; eerdere database bewaard als herstelkopie")
         self.reply(b'{"ok":true}', "application/json")
 
     def receive_backup(self, file):
@@ -593,9 +631,29 @@ class Dashboard(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    DATA.mkdir(parents=True, exist_ok=True)
+    handlers = [logging.StreamHandler()]
+    try:
+        handlers.append(RotatingFileHandler(DATA / "ha-bandwidth.log", maxBytes=1024 * 1024, backupCount=3, encoding="utf-8"))
+    except OSError:
+        pass
+    logging.Formatter.converter = time.gmtime
+    logging.basicConfig(level=logging.INFO, format="%(asctime)sZ %(levelname)s %(message)s",
+                        datefmt="%Y-%m-%dT%H:%M:%S", handlers=handlers)
+    if len(handlers) == 1:
+        logging.warning("Logbestand niet beschikbaar; Home Assistant Logboek blijft actief")
+    version_line = next(line for line in (ROOT / "config.yaml").read_text().splitlines() if line.startswith("version:"))
+    version = version_line.partition(":")[2].strip().strip('"')
+    marker = DATA / "last-version"
+    try:
+        previous_version = marker.read_text().strip() if marker.exists() else ""
+        if previous_version and previous_version != version:
+            logging.info("Versiewissel: %s → %s", previous_version, version)
+        marker.write_text(version)
+    except OSError:
+        logging.warning("Kon de vorige appversie niet lezen of bijwerken")
     initialize()
+    logging.info("HA-Bandwidth %s gestart op poort 63187", version)
     threading.Thread(target=collect, daemon=True).start()
-    logging.info("HA-Bandwidth gestart op poort 63187")
     ThreadingHTTPServer(("0.0.0.0", 63187), Dashboard).serve_forever()
 

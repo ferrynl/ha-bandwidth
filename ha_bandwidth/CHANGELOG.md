@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.7
+
+- Accepteert Zyxel-sensor-ID’s met of zonder `sensor.` en meldt fouten per configuratieveld.
+- Gedateerde meldingen voor uitlezing, storingen, herstel van verbindingen, versieovergangen en back-upacties.
+
 ## 0.9.6
 
 - Vergelijk de bestaande Home Assistant-modemtellers naast OpenWrt WAN en de HA-server.
