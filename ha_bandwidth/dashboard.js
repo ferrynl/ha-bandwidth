@@ -101,7 +101,7 @@ function addRouterHost(cell, host) {
   cell.append(label);
 }
 
-function addIpLookup(cell, ip, tableId) {
+function addIpLookup(cell, ip, stored) {
   if (!ip) return;
   const button = document.createElement("button");
   button.type = "button";
@@ -112,7 +112,9 @@ function addIpLookup(cell, ip, tableId) {
   result.className = "ip-result";
   result.setAttribute("role", "status");
   const render = () => {
-    const details = ipDetails.get(ip);
+    const details = stored || ipDetails.get(ip);
+    button.hidden = Boolean(details && !details.pending && !details.error &&
+      (details.asn || details.as_name || details.as_domain));
     button.disabled = details?.pending === true;
     result.textContent = details?.pending ? "Netwerk opzoeken…"
       : details?.error || (details && [details.asn, details.as_name, details.as_domain].filter(Boolean).join(" · "))
@@ -128,22 +130,25 @@ function addIpLookup(cell, ip, tableId) {
     cell.parentElement.dataset.search = ip + " " + result.textContent;
   };
   button.addEventListener("click", async () => {
-    if (!ipDetails.has(ip) || ipDetails.get(ip).error) {
+    if (!stored && (!ipDetails.has(ip) || ipDetails.get(ip).error)) {
       ipDetails.set(ip, {pending: true});
       render();
       try {
         const response = await fetch("./api/ipinfo?" + new URLSearchParams({ip}));
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "IPinfo ophalen mislukt.");
-        ipDetails.set(ip, data);
+        if (data.asn || data.as_name || data.as_domain) ipDetails.set(ip, data);
+        else ipDetails.set(ip, {error: "Geen netwerkgegevens gevonden."});
       } catch (error) {
         ipDetails.set(ip, {error: error.message});
       }
     }
-    for (const refresh of el(tableId).querySelectorAll(".ip-lookup")) {
-      if (refresh.dataset.ip === ip) refresh.refreshIpDetails();
+    for (const id of ["rows", "destination-rows"]) {
+      for (const refresh of el(id).querySelectorAll(".ip-lookup")) {
+        if (refresh.dataset.ip === ip) refresh.refreshIpDetails();
+      }
+      if (tableControls.has(id)) updateTable(id);
     }
-    updateTable(tableId);
   });
   button.dataset.ip = ip;
   button.refreshIpDetails = render;
@@ -242,7 +247,7 @@ function table(rows) {
     const cell = tr.insertCell();
     cell.append(button);
     addRouterHost(cell, row.router_host);
-    addIpLookup(cell, row.lookup_ip, "rows");
+    addIpLookup(cell, row.lookup_ip, row.ipinfo);
     countCells(tr, row.rx, row.tx);
   }
   updateTable("rows");
@@ -288,7 +293,7 @@ function showDestinations(data) {
       mac.textContent = row.router_host.mac;
       ipCell.append(mac);
     }
-    addIpLookup(ipCell, row.lookup_ip, "destination-rows");
+    addIpLookup(ipCell, row.lookup_ip, row.ipinfo);
     tr.insertCell().textContent = row.scope;
     tr.insertCell().textContent = row.protocol || "—";
     const port = tr.insertCell();
@@ -649,6 +654,7 @@ el("restore-form").addEventListener("submit", async event => {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+    ipDetails.clear();
     event.target.reset();
     status.textContent = "De meetgegevens zijn teruggezet.";
     await backupStatus();

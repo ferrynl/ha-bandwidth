@@ -13,7 +13,7 @@ Home Assistant OS-app voor upload, download en de grootste verbruikers per dag, 
 
 Gebruik de zoekbalk boven een verkeerstabel en klik op een kolomkop om te sorteren. Dit werkt op de weergegeven regels en laat de grafiek en periodetotalen intact.
 
-Vul bij **HA-Bandwidth → Configuratie** je IPinfo Lite-token in bij `ipinfo_token`, sla op en herstart de app. Klik naast een publiek IP-adres op **IPinfo** om het ASN, de netwerkorganisatie en het organisatiedomein op te zoeken. Alleen een aangeklikt publiek adres wordt naar IPinfo gestuurd. Het organisatiedomein komt van IPinfo en kan verschillen van het TLS- of DNS-domein dat in het verkeer is waargenomen. [IPinfo Lite](https://ipinfo.io/developers/lite-api)
+Vul bij **HA-Bandwidth → Configuratie** je IPinfo Lite-token in bij `ipinfo_token`, sla op en herstart de app. Klik naast een publiek IP-adres op **IPinfo** om het ASN, de netwerkorganisatie en het organisatiedomein op te zoeken. Alleen een aangeklikt publiek adres wordt naar IPinfo gestuurd. Gevonden gegevens worden in `/data/bandwidth.sqlite3` opgeslagen en in de IP- en bestemmingstabellen getoond, ook na herstart. De SQLite-back-up bevat ook deze gegevens. Het organisatiedomein komt van IPinfo en kan verschillen van het TLS- of DNS-domein dat in het verkeer is waargenomen. [IPinfo Lite](https://ipinfo.io/developers/lite-api)
 
 ## Lokale IP-adressen herkennen
 

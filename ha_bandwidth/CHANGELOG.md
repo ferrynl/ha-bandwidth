@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+
+- IPinfo-resultaten worden per publiek IP opgeslagen en verschijnen direct in IP- en bestemmingstabellen, ook na een herstart.
+- De verkeersgrafieken krijgen balken met een licht bovenvlak, een donker zijvlak en schaduw.
+
 ## 0.10.1
 
 - Vermeld de HTTP-status van een mislukte Zyxel-login en een eventuele Zyxel-resultaatcode, zonder inloggegevens of sessiegegevens te loggen.

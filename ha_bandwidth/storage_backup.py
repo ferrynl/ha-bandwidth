@@ -8,6 +8,7 @@ MAX_BACKUP_SIZE = 256 * 1024 * 1024
 TABLES = {
     "traffic": ("hour", "kind", "source", "label", "rx", "tx"),
     "app_destinations": ("app", "day", "ip", "protocol", "port", "domain", "evidence", "rx", "tx"),
+    "ipinfo_cache": ("ip", "asn", "as_name", "as_domain"),
 }
 
 
@@ -30,7 +31,7 @@ def restore(connection, uploaded, rescue, previous):
                 "SELECT type FROM incoming.pragma_table_list WHERE schema = 'incoming' AND name = ?", (table,)
             ).fetchone()
             if metadata is None and table != "traffic":
-                continue  # 0.1.0 backups predate app destinations.
+                continue  # Older backups can omit newer tables.
             schema = connection.execute(f"PRAGMA incoming.table_xinfo({table})").fetchall()
             if not metadata or metadata[0] != "table" or tuple(row[1] for row in schema) != columns or any(row[6] for row in schema):
                 raise ValueError("Dit bestand bevat geen ondersteunde HA-Bandwidth-database.")
@@ -38,11 +39,18 @@ def restore(connection, uploaded, rescue, previous):
                 f"typeof({column}) = '{'integer' if column in ('rx', 'tx', 'port', 'protocol') else 'text'}'"
                 for column in columns
             )
-            valid = connection.execute(f"""
-                SELECT COALESCE(MIN(({expected}) AND rx >= 0 AND tx >= 0), 1),
-                       COALESCE(SUM(CAST(rx AS REAL) + tx), 0)
-                FROM incoming.{table}
-            """).fetchone()
+            if table == "ipinfo_cache":
+                expected += " AND length(ip) BETWEEN 1 AND 45 AND length(asn) <= 250"
+                expected += " AND length(as_name) <= 250 AND length(as_domain) <= 250"
+                valid = connection.execute(
+                    f"SELECT COALESCE(MIN({expected}), 1), 0 FROM incoming.ipinfo_cache"
+                ).fetchone()
+            else:
+                valid = connection.execute(f"""
+                    SELECT COALESCE(MIN(({expected}) AND rx >= 0 AND tx >= 0), 1),
+                           COALESCE(SUM(CAST(rx AS REAL) + tx), 0)
+                    FROM incoming.{table}
+                """).fetchone()
             if not valid[0] or not 0 <= valid[1] <= 9e18:
                 raise ValueError("De back-up bevat ongeldige meetgegevens.")
             tables[table] = ", ".join(columns)
@@ -55,6 +63,8 @@ def restore(connection, uploaded, rescue, previous):
                     current.backup(before)
                 before.execute("PRAGMA journal_mode = DELETE")
             for table in TABLES:
+                if table == "ipinfo_cache" and table not in tables:
+                    continue
                 connection.execute(f"DELETE FROM main.{table}")
                 if table in tables:
                     columns = tables[table]

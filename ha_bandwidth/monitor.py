@@ -1,5 +1,4 @@
 import concurrent.futures
-import functools
 import ipaddress
 import http.client
 import json
@@ -40,6 +39,7 @@ PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
+IPINFO_LOCK = threading.Lock()
 OPENWRT_ENABLED = bool(SETTINGS.get("openwrt_url", "").strip())
 
 
@@ -63,6 +63,9 @@ def initialize():
                 app TEXT, day TEXT, ip TEXT, protocol INTEGER, port INTEGER, domain TEXT,
                 evidence TEXT, rx INTEGER NOT NULL, tx INTEGER NOT NULL,
                 PRIMARY KEY (app, day, ip, protocol, port, domain, evidence)
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS ipinfo_cache (
+                ip TEXT PRIMARY KEY, asn TEXT NOT NULL, as_name TEXT NOT NULL, as_domain TEXT NOT NULL
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS app_destinations_day ON app_destinations(day);
         """)
@@ -433,13 +436,18 @@ def report(day, period, kind, source):
                 item["lookup_ip"] = public_ip(item["ip"])
                 item["router_host"] = router_hosts.get(item["ip"])
                 destinations.append(item)
-    return {
-        "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
-        "rows": [
+        rows = [
             dict(row, lookup_ip=public_ip(row["source"]), router_host=router_hosts.get(row["source"]))
             if kind == "peer" else dict(row)
             for row in leaders
-        ],
+        ]
+        details = stored_ipinfo(db, {row["lookup_ip"] for row in rows + destinations if row.get("lookup_ip")})
+        for row in rows + destinations:
+            if row.get("lookup_ip") in details:
+                row["ipinfo"] = details[row["lookup_ip"]]
+    return {
+        "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
+        "rows": rows,
         "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
@@ -462,8 +470,33 @@ def public_ip(value):
     return str(address)
 
 
-@functools.lru_cache(maxsize=512)
-def ipinfo_lookup(address, day):
+def stored_ipinfo(db, addresses):
+    if not addresses:
+        return {}
+    placeholders = ", ".join("?" for _ in addresses)
+    rows = db.execute(
+        f"SELECT ip, asn, as_name, as_domain FROM ipinfo_cache WHERE ip IN ({placeholders})",
+        tuple(addresses),
+    )
+    return {row["ip"]: {key: row[key] for key in ("asn", "as_name", "as_domain")} for row in rows}
+
+
+def ipinfo_lookup(address):
+    # Recheck under the lock so simultaneous clicks only make one request.
+    with IPINFO_LOCK, closing(database()) as db:
+        cached = stored_ipinfo(db, (address,)).get(address)
+        if cached is not None:
+            return cached
+        details = fetch_ipinfo(address)
+        if any(details.values()):
+            with db:
+                db.execute("INSERT INTO ipinfo_cache VALUES (?, ?, ?, ?)", (
+                    address, *(details.get(key, "") for key in ("asn", "as_name", "as_domain"))
+                ))
+        return details
+
+
+def fetch_ipinfo(address):
     token = SETTINGS.get("ipinfo_token", "").strip()
     if not token:
         raise ValueError("Vul ipinfo_token in bij HA-Bandwidth → Configuratie.")
@@ -497,9 +530,13 @@ class Dashboard(BaseHTTPRequestHandler):
                 self.send_json_error(400, "IPinfo ondersteunt hier alleen publieke IP-adressen.")
                 return
             try:
-                data = ipinfo_lookup(address, datetime.now(ZONE).date())
+                data = ipinfo_lookup(address)
             except ValueError as error:
                 self.send_json_error(400, str(error))
+                return
+            except sqlite3.Error:
+                logging.exception("IPinfo-opslag is mislukt")
+                self.send_json_error(500, "IPinfo kon niet worden opgeslagen of gelezen.")
                 return
             self.reply(json.dumps(data).encode(), "application/json")
             return
