@@ -19,6 +19,12 @@ OpenWrt WAN telt verkeer over de gekozen WAN-interface van alle aangesloten appa
 
 Eerder ingestelde cumulatieve Home Assistant-sensoren blijven bruikbaar als `openwrt_url` leeg is. Die historie wordt apart bewaard van de rechtstreekse OpenWrt-metingen.
 
+## Verkeer per apparaat
+
+Installeer `luci-app-nlbwmon` op OpenWrt en controleer of **Status → Bandwidth Monitor** op de router verkeer toont. De app gebruikt de bestaande OpenWrt-verbinding en leest hetzelfde overzicht als LuCI. Voor een beperkt routeraccount is leestoegang tot `luci-app-nlbwmon` nodig. Apparaatnamen uit OpenWrt worden gebruikt als ze beschikbaar zijn.
+
+Open **Apparaten** in HA-Bandwidth. De tabel toont upload en download per apparaat voor de gekozen periode. Klik op een apparaatnaam voor de bijbehorende grafiek. De app voegt IPv4- en IPv6-regels met hetzelfde MAC-adres samen. Zonder herkenbaar MAC-adres gebruikt de app het IP-adres. Metingen beginnen na de eerste uitlezing van de router. OpenWrt meet via de router gevolgde verbindingen. Lokaal verkeer dat rechtstreeks via wifi of een switch loopt, valt buiten die meting.
+
 ## Back-up
 
 Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen.

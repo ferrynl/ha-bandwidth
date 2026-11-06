@@ -1,14 +1,17 @@
 """Read OpenWrt WAN byte counters over authenticated ubus JSON-RPC."""
 
+import ipaddress
 import json
 import re
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, urlunsplit
+from datetime import date
+from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 NULL_SESSION = "0" * 32
 INTERFACE = re.compile(r"[a-zA-Z0-9_-]{1,64}")
 SESSION = re.compile(r"[0-9a-f]{32}")
+MAC = re.compile(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
 
 
 class AccessDenied(ValueError):
@@ -95,6 +98,41 @@ class OpenWrt:
         source = f"{url}#{interface}"
         return str(self.generation), "openwrt", source, f"OpenWrt WAN ({interface})", rx, tx
 
+    def nlbw_query(self, *arguments):
+        url = ubus_url(self.settings.get("openwrt_url", ""))
+        endpoint = urlsplit(url)._replace(path="/cgi-bin/cgi-exec").geturl()
+        form = urlencode({
+            "sessionid": self.session,
+            "command": " ".join(("/usr/libexec/nlbwmon-action", *arguments)),
+            "stderr": 0,
+        })
+        request = Request(endpoint, data=form.encode(), headers={"Content-Type": "application/x-www-form-urlencoded"})
+        try:
+            with self.opener.open(request, timeout=5) as response:
+                data = json.loads(response.read(4 * 1024 * 1024 + 1))
+        except HTTPError as error:
+            if error.code == 403:
+                raise ValueError("OpenWrt weigert toegang tot de Bandwidth Monitor. Controleer het pakket en de leesrechten.") from None
+            raise ValueError("OpenWrt Bandwidth Monitor is niet beschikbaar. Controleer luci-app-nlbwmon.") from None
+        except (OSError, ValueError):
+            raise ValueError("Geen geldige meting van OpenWrt Bandwidth Monitor. Controleer of nlbwmon draait.") from None
+        if not isinstance(data, dict):
+            raise ValueError("OpenWrt Bandwidth Monitor gaf een onverwacht antwoord.")
+        return data
+
+    def device_readings(self):
+        periods = self.nlbw_query("periods").get("periods")
+        if not isinstance(periods, list) or not periods:
+            raise ValueError("OpenWrt Bandwidth Monitor heeft nog geen meetperiode.")
+        period = max(date.fromisoformat(value).isoformat() for value in periods if isinstance(value, str))
+        data = self.nlbw_query("download", "-g", "mac,ip")
+        url = ubus_url(self.settings.get("openwrt_url", ""))
+        try:
+            hints = self.call(url, self.session, "luci-rpc", "getHostHints", {})
+        except (OSError, ValueError):
+            hints = {}
+        return device_counters(data, hints, period)
+
     def reading(self):
         url = ubus_url(self.settings.get("openwrt_url", ""))
         interface = self.settings.get("openwrt_interface", "wan").strip()
@@ -110,3 +148,46 @@ class OpenWrt:
             self.login(url)
             return self.counters(url, interface)
 
+
+
+def device_counters(data, hints, period):
+    columns, rows = data.get("columns"), data.get("data")
+    if not isinstance(columns, list) or not isinstance(rows, list):
+        raise ValueError("OpenWrt Bandwidth Monitor gaf geen apparaattellers.")
+    try:
+        indices = [columns.index(key) for key in ("mac", "ip", "rx_bytes", "tx_bytes")]
+    except ValueError:
+        raise ValueError("OpenWrt Bandwidth Monitor mist de MAC-, IP- of bytetellers.") from None
+    devices = {}
+    hints = {key.lower(): value for key, value in hints.items()}
+    for row in rows:
+        if not isinstance(row, list) or len(row) <= max(indices):
+            continue
+        mac, ip, rx, tx = (row[index] for index in indices)
+        if any(type(count) is not int or not 0 <= count < 2**63 for count in (rx, tx)):
+            continue
+        try:
+            address = ipaddress.ip_address(ip) if isinstance(ip, str) else None
+        except ValueError:
+            address = None
+        mac = mac.lower() if isinstance(mac, str) else ""
+        if MAC.fullmatch(mac) and mac != "00:00:00:00:00:00":
+            source = mac
+        elif address and not address.is_unspecified:
+            source = str(address)
+        else:
+            continue
+        totals, addresses = devices.setdefault(source, ([0, 0], set()))
+        totals[0] += rx
+        totals[1] += tx
+        if address and not address.is_unspecified:
+            addresses.add(address)
+    readings = []
+    for source, ((rx, tx), addresses) in devices.items():
+        hint = hints.get(source)
+        name = hint.get("name") if isinstance(hint, dict) else None
+        name = name.strip()[:120] if isinstance(name, str) and name.strip() else source
+        ip = str(min(addresses, key=lambda address: (address.version, int(address)))) if addresses else ""
+        label = f"{name} · {ip}" if ip and ip != name else name
+        readings.append((period, "device", source, label, rx, tx))
+    return readings

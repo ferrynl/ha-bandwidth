@@ -32,7 +32,7 @@ SETTINGS = json.loads(OPTIONS.read_text(encoding="utf-8")) if OPTIONS.exists() e
 ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
 STATUS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
-KINDS = {"host", "app", "peer", "compare"}
+KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
 OPENWRT_ENABLED = bool(SETTINGS.get("openwrt_url", "").strip())
@@ -227,6 +227,15 @@ def collect():
                     readings.append(modem_reading(SETTINGS))
             except (OSError, URLError, ValueError, http.client.HTTPException) as error:
                 router_error = str(error)
+            device_error = ""
+            if openwrt:
+                if openwrt.session:
+                    try:
+                        readings.extend(openwrt.device_readings())
+                    except (OSError, ValueError, http.client.HTTPException) as error:
+                        device_error = str(error)
+                else:
+                    device_error = router_error
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -254,6 +263,7 @@ def collect():
                 "app_destinations_enabled": track_apps,
                 "router_configured": OPENWRT_ENABLED or modem_configured, "router_error": router_error,
                 "router_device": openwrt.device if openwrt and not router_error else "",
+                "device_configured": OPENWRT_ENABLED, "device_error": device_error,
             }
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
@@ -295,8 +305,8 @@ def report(day, period, kind, source):
         leaders = db.execute("""
             SELECT source, MAX(label) AS label, SUM(rx) AS rx, SUM(tx) AS tx
             FROM traffic WHERE hour >= ? AND hour < ? AND kind = ?
-            GROUP BY source ORDER BY SUM(rx + tx) DESC LIMIT 30
-        """, bounds).fetchall()
+            GROUP BY source ORDER BY SUM(rx + tx) DESC, source LIMIT ?
+        """, (*bounds, -1 if kind == "device" else 30)).fetchall()
         params = (PERIODS[period], *bounds)
         sql = """
             SELECT substr(hour, 1, ?) AS bucket, SUM(rx) AS rx, SUM(tx) AS tx

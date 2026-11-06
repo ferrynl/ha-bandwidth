@@ -3,6 +3,7 @@
 const el = id => document.getElementById(id);
 const format = new Intl.NumberFormat("nl-NL", {maximumFractionDigits: 2});
 const views = {
+  device: ["Internetverkeer per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor. Klik op een apparaat om alleen het verkeer daarvan te bekijken.", "Verkeer per apparaat"],
   compare: ["OpenWrt WAN telt het internetverkeer van alle apparaten die via de router online gaan. De HA-server telt op zijn eigen netwerkinterface ook lokaal verkeer mee.", ""],
   host: ["Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal.", "Verkeer per netwerkinterface"],
   app: ["Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal.", "Top 30 apps en containers"],
@@ -170,6 +171,10 @@ function show(data) {
       (data.first ? " · historie vanaf " + data.first.slice(0, 10) : "")
     : "Wachten op de eerste meetronde";
   const warnings = [...(status.errors || [])];
+  if (kind === "device") {
+    if (status.device_error) warnings.push(status.device_error);
+    else if (status.device_configured === false) warnings.push("Stel OpenWrt in onder HA-Bandwidth → Configuratie.");
+  }
   if (kind === "peer" && status.peers_enabled === false) warnings.push("IP-meting staat uit.");
   el("warnings").hidden = warnings.length === 0;
   el("warnings").textContent = warnings.join(" · ");

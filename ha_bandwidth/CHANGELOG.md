@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- **Apparaten** toont upload en download per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor.
+- Klik op een apparaat om de grafiek te filteren. IPv4- en IPv6-verkeer met hetzelfde MAC-adres wordt samengevoegd.
+
 ## 0.5.0
 
 - **Server** toont de grootste bronnen en bestemmingen op de serverinterface, inclusief verkeer dat niet afzonderlijk onder **Apps** zichtbaar is.
