@@ -15,6 +15,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
+from destinations import AppDestinations, PROTOCOLS, bridge_apps
+
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("BANDWIDTH_DATA", "/data"))
 INTERVAL = 30
@@ -42,6 +44,12 @@ def initialize():
                 rx INTEGER NOT NULL, tx INTEGER NOT NULL,
                 PRIMARY KEY (hour, kind, source)
             ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS app_destinations (
+                app TEXT, day TEXT, ip TEXT, protocol INTEGER, port INTEGER, domain TEXT,
+                evidence TEXT, rx INTEGER NOT NULL, tx INTEGER NOT NULL,
+                PRIMARY KEY (app, day, ip, protocol, port, domain, evidence)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS app_destinations_day ON app_destinations(day);
         """)
 
 
@@ -102,10 +110,10 @@ def app_counters(container):
     ]
 
 
-def read_apps(pool):
+def read_apps(pool, containers):
     counters, shared, unavailable = [], [], []
     pending = {}
-    for container in docker_get("/containers/json"):
+    for container in containers:
         name = container["Names"][0].lstrip("/")
         mode = container["HostConfig"]["NetworkMode"]
         if mode == "host" or mode.startswith("container:"):
@@ -202,7 +210,7 @@ def deltas(readings, previous):
     return current, rows
 
 
-def record(now, rows, prune):
+def record(now, rows, prune, destinations=()):
     hour = now.strftime("%Y-%m-%dT%H")
     with closing(database()) as db, db:
         db.executemany("""
@@ -210,14 +218,24 @@ def record(now, rows, prune):
             ON CONFLICT(hour, kind, source) DO UPDATE SET
                 label = excluded.label, rx = rx + excluded.rx, tx = tx + excluded.tx
         """, [(hour, *row) for row in rows])
+        if destinations:
+            day = now.date().isoformat()
+            db.executemany("""
+                INSERT INTO app_destinations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(app, day, ip, protocol, port, domain, evidence) DO UPDATE SET
+                    rx = rx + excluded.rx, tx = tx + excluded.tx
+            """, [(app, day, *details) for app, *details in destinations])
         if prune:
             cutoff = (now.date() - timedelta(days=399)).isoformat()
             db.execute("DELETE FROM traffic WHERE hour < ?", (cutoff,))
+            db.execute("DELETE FROM app_destinations WHERE day < ?", (cutoff,))
 
 
 def collect():
     global STATUS
     previous, capture, last_day = {}, None, None
+    app_destinations = AppDestinations()
+    track_apps = SETTINGS.get("track_app_destinations", True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         while True:
             started = time.monotonic()
@@ -233,11 +251,22 @@ def collect():
                 capture = None
             if interface and capture is None and SETTINGS.get("track_peers", True):
                 capture = PeerCapture(interface)
+            containers = None
             try:
-                apps, shared, unavailable = read_apps(pool)
+                containers = docker_get("/containers/json")
+                apps, shared, unavailable = read_apps(pool, containers)
                 readings.extend(apps)
             except (OSError, http.client.HTTPException, ValueError) as error:
                 errors.append(f"Docker-statistieken ontbreken ({error}). Controleer Beveiligde modus.")
+            destinations = []
+            if track_apps:
+                try:
+                    owners = bridge_apps(docker_get("/networks"), containers) if containers is not None else {}
+                    destinations, capture_errors = app_destinations.collect(owners)
+                    errors.extend(f"App-bestemmingen · {error}" for error in capture_errors)
+                except (OSError, http.client.HTTPException, ValueError) as error:
+                    destinations, _ = app_destinations.collect({})
+                    errors.append(f"App-bestemmingen: {error}")
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -246,7 +275,7 @@ def collect():
                 if capture.error:
                     errors.append(f"IP-meting: {capture.error}")
             try:
-                record(now, rows, now.date() != last_day)
+                record(now, rows, now.date() != last_day, destinations)
                 last_day = now.date()
             except sqlite3.Error as error:
                 logging.exception("Meting kon niet worden opgeslagen")
@@ -255,6 +284,7 @@ def collect():
                 "interface": interface, "updated": now.isoformat(), "errors": errors,
                 "shared": shared, "unavailable": unavailable, "zone": ZONE.key,
                 "peers_enabled": SETTINGS.get("track_peers", True),
+                "app_destinations_enabled": track_apps,
             }
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
@@ -290,10 +320,24 @@ def report(day, period, kind, source):
             params += (source,)
         buckets = db.execute(sql + " GROUP BY bucket ORDER BY bucket", params).fetchall()
         first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
+        destinations = []
+        if kind == "app" and source:
+            matching = db.execute("""
+                SELECT ip, protocol, port, domain, evidence, SUM(rx) AS rx, SUM(tx) AS tx
+                FROM app_destinations WHERE app = ? AND day >= ? AND day < ?
+                GROUP BY ip, protocol, port, domain, evidence
+                ORDER BY SUM(rx + tx) DESC, ip, protocol, port, domain, evidence LIMIT 101
+            """, (source, *bounds[:2])).fetchall()
+            for row in matching[:100]:
+                item = dict(row)
+                number = item["protocol"]
+                item["protocol"] = PROTOCOLS.get(number, f"IP-protocol {number}" if number >= 0 else "")
+                destinations.append(item)
     return {
         "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
         "rows": [dict(row) for row in leaders], "buckets": [dict(row) for row in buckets],
-        "status": STATUS, "first": first,
+        "status": STATUS, "first": first, "destinations": destinations,
+        "destinations_truncated": kind == "app" and bool(source) and len(matching) > 100,
     }
 
 

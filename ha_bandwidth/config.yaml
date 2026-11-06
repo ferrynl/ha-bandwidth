@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.1.0"
+version: "0.2.0"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -20,7 +20,9 @@ options:
   interface: auto
   timezone: Europe/Amsterdam
   track_peers: true
+  track_app_destinations: true
 schema:
   interface: str
   timezone: str
   track_peers: bool
+  track_app_destinations: bool

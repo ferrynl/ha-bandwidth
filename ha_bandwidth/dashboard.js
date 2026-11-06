@@ -13,6 +13,7 @@ let period = "day";
 let source = "";
 let sourceLabel = "";
 let request = 0;
+let focusDestinations = false;
 
 function bytes(value) {
   let index = 0;
@@ -91,10 +92,47 @@ function table(rows) {
     button.addEventListener("click", () => {
       source = row.source;
       sourceLabel = row.label;
+      focusDestinations = kind === "app";
       load();
     });
     tr.insertCell().append(button);
     for (const count of [row.rx, row.tx, row.rx + row.tx]) tr.insertCell().textContent = bytes(count);
+  }
+}
+
+function showDestinations(data) {
+  const section = el("destinations");
+  section.hidden = kind !== "app" || !source;
+  if (section.hidden) {
+    focusDestinations = false;
+    return;
+  }
+  const title = el("destinations-title");
+  title.textContent = "Bestemmingen · " + sourceLabel;
+  const rows = data.destinations;
+  const body = el("destination-rows");
+  body.replaceChildren();
+  el("destinations-table").hidden = rows.length === 0;
+  let note = "Waargenomen IP-verkeer. TLS geeft een zichtbare domeinnaam aan. DNS is een aanwijzing.";
+  if (rows.length === 0) {
+    note = data.status.app_destinations_enabled === false
+      ? "De meting van app-bestemmingen staat uit."
+      : "Geen bestemmingen gemeten voor deze app en periode.";
+  } else if (data.destinations_truncated) {
+    note += " De tabel toont de 100 grootste regels.";
+  }
+  el("destinations-note").textContent = note;
+  for (const row of rows) {
+    const tr = body.insertRow();
+    const domain = row.domain ? row.domain + " (" + row.evidence + ")" : "Onbekend";
+    for (const value of [
+      domain, row.ip || "Overige verbindingen", row.protocol || "—",
+      row.port >= 0 ? row.port : "—", bytes(row.rx), bytes(row.tx), bytes(row.rx + row.tx),
+    ]) tr.insertCell().textContent = value;
+  }
+  if (focusDestinations) {
+    focusDestinations = false;
+    title.focus();
   }
 }
 
@@ -122,6 +160,7 @@ function show(data) {
   el("chart").parentElement.hidden = !hasData;
   if (hasData) timeline(data);
   table(data.rows);
+  showDestinations(data);
   el("shared-section").hidden = kind !== "app" || !(status.shared?.length || status.unavailable?.length);
   el("shared").textContent = status.shared?.join(", ") || "";
   el("unavailable").textContent = status.unavailable?.length
@@ -143,6 +182,7 @@ async function load() {
     if (id !== request) return;
     el("warnings").hidden = false;
     el("warnings").textContent = "Dashboard kon de metingen niet ophalen (" + error.message + ").";
+    el("destinations").hidden = true;
   }
 }
 
