@@ -1,4 +1,4 @@
-"""Passive destination accounting on Docker's Linux bridges."""
+"""Passive destination accounting on Linux interfaces and Docker bridges."""
 
 import ipaddress
 import socket
@@ -188,8 +188,8 @@ def bridge_apps(networks, containers):
     return groups
 
 
-class BridgeCapture:
-    def __init__(self, interface, owners):
+class NetworkCapture:
+    def __init__(self, interface, owners=None):
         self.interface = interface
         self.owners = owners
         self.lock = threading.Lock()
@@ -205,26 +205,33 @@ class BridgeCapture:
         try:
             with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3)) as sock:
                 sock.bind((self.interface, 3))
-                index = socket.if_nametoindex(self.interface)
-                # SOL_PACKET / PACKET_ADD_MEMBERSHIP / PACKET_MR_PROMISC.
-                # Membership ends automatically when this socket closes.
-                sock.setsockopt(263, 1, struct.pack("=iHH8s", index, 1, 0, b""))
+                if self.owners is not None:
+                    index = socket.if_nametoindex(self.interface)
+                    # SOL_PACKET / PACKET_ADD_MEMBERSHIP / PACKET_MR_PROMISC.
+                    sock.setsockopt(263, 1, struct.pack("=iHH8s", index, 1, 0, b""))
                 sock.settimeout(0.5)
                 while not self.stop.is_set():
                     try:
-                        frame, _ = sock.recvfrom(8192)
+                        frame, address = sock.recvfrom(8192)
                     except TimeoutError:
+                        continue
+                    if self.owners is None and address[2] == 3:  # PACKET_OTHERHOST
                         continue
                     parsed = packet(frame)
                     if parsed:
+                        direction = address[2] == 4 if self.owners is None else None
                         with self.lock:
-                            self.observe(parsed)
+                            self.observe(parsed, direction)
         except OSError as error:
             self.error = str(error)
 
-    def observe(self, parsed):
+    def observe(self, parsed, direction=None):
         src, dst, size, protocol, sport, dport, syn, payload = parsed
-        sender, receiver = self.owners.get(src), self.owners.get(dst)
+        if direction is None:
+            sender, receiver = self.owners.get(src), self.owners.get(dst)
+        else:
+            owner = ("@host:" + self.interface, self.interface)
+            sender, receiver = (owner, None) if direction else (None, owner)
         if not sender and not receiver:
             return
         now = time.monotonic()
@@ -301,7 +308,7 @@ class AppDestinations:
                 with capture.lock:
                     capture.owners = endpoints
             else:
-                self.captures[bridge] = BridgeCapture(bridge, endpoints)
+                self.captures[bridge] = NetworkCapture(bridge, endpoints)
             rows.extend(self.captures[bridge].drain())
         return rows, errors
 

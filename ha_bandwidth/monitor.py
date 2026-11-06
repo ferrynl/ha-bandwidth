@@ -1,4 +1,5 @@
 import concurrent.futures
+import ipaddress
 import http.client
 import json
 import logging
@@ -18,7 +19,7 @@ from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
-from destinations import AppDestinations, PROTOCOLS, bridge_apps
+from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import modem_reading
 from openwrt import OpenWrt
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
@@ -142,71 +143,6 @@ def read_apps(pool, containers):
     return counters, sorted(shared), sorted(unavailable)
 
 
-def peer_packet(frame, packet_type):
-    # AF_PACKET delivers an Ethernet header and Linux's packet direction.
-    if len(frame) < 14 or packet_type == 3:  # PACKET_OTHERHOST
-        return None
-    protocol = int.from_bytes(frame[12:14], "big")
-    offset = 14
-    while protocol in (0x8100, 0x88A8) and len(frame) >= offset + 4:
-        protocol = int.from_bytes(frame[offset + 2:offset + 4], "big")
-        offset += 4
-    outgoing = packet_type == 4  # PACKET_OUTGOING
-    if protocol == 0x0800 and len(frame) >= offset + 20:
-        address = offset + (16 if outgoing else 12)
-        peer = socket.inet_ntop(socket.AF_INET, frame[address:address + 4])
-        size = int.from_bytes(frame[offset + 2:offset + 4], "big")
-    elif protocol == 0x86DD and len(frame) >= offset + 40:
-        address = offset + (24 if outgoing else 8)
-        peer = socket.inet_ntop(socket.AF_INET6, frame[address:address + 16])
-        size = 40 + int.from_bytes(frame[offset + 4:offset + 6], "big")
-    else:
-        return None
-    return peer, size, outgoing
-
-
-class PeerCapture:
-    def __init__(self, interface):
-        self.interface = interface
-        self.lock = threading.Lock()
-        self.stop = threading.Event()
-        self.peers = {}
-        self.error = None
-        self.worker = threading.Thread(target=self.capture, daemon=True)
-        self.worker.start()
-
-    def capture(self):
-        try:
-            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3)) as sock:
-                sock.bind((self.interface, 3))
-                sock.settimeout(0.5)
-                while not self.stop.is_set():
-                    try:
-                        frame, address = sock.recvfrom(96)
-                    except TimeoutError:
-                        continue
-                    result = peer_packet(frame, address[2])
-                    if result:
-                        peer, size, outgoing = result
-                        with self.lock:
-                            if len(self.peers) >= 512 and peer not in self.peers:
-                                peer = "Overige IP-adressen"
-                            self.peers.setdefault(peer, [0, 0])[outgoing] += size
-        except OSError as error:
-            self.error = str(error)
-            logging.warning("IP-meting op %s: %s", self.interface, error)
-
-    def drain(self):
-        with self.lock:
-            rows = [("peer", peer, peer, *counts) for peer, counts in self.peers.items()]
-            self.peers.clear()
-        return rows
-
-    def close(self):
-        self.stop.set()
-        self.worker.join(timeout=1)
-
-
 def deltas(readings, previous):
     current = {}
     rows = []
@@ -258,11 +194,15 @@ def collect():
                 readings.extend(host_counters(interface))
             except (OSError, subprocess.SubprocessError, ValueError) as error:
                 errors.append(f"Servermeting: {error}")
+            host_destinations = []
             if capture and (interface != capture.interface or capture.error):
                 capture.close()
+                host_destinations.extend(capture.drain())
+                if capture.error:
+                    errors.append(f"IP-meting: {capture.error}")
                 capture = None
             if interface and capture is None and SETTINGS.get("track_peers", True):
-                capture = PeerCapture(interface)
+                capture = NetworkCapture(interface)
             containers = None
             try:
                 containers = docker_get("/containers/json")
@@ -291,11 +231,18 @@ def collect():
             current, rows = deltas(readings, previous)
             previous = current
             if capture:
-                rows.extend(capture.drain())
+                host_destinations.extend(capture.drain())
                 if capture.error:
                     errors.append(f"IP-meting: {capture.error}")
+            peer_totals = {}
+            for _, peer, _, _, _, _, rx, tx in host_destinations:
+                label = peer or "Overige IP-adressen"
+                totals = peer_totals.setdefault(label, [0, 0])
+                totals[0] += rx
+                totals[1] += tx
+            rows.extend(("peer", peer, peer, *totals) for peer, totals in peer_totals.items())
             try:
-                record(now, rows, now.date() != last_day, destinations)
+                record(now, rows, now.date() != last_day, destinations + host_destinations)
                 last_day = now.date()
             except sqlite3.Error as error:
                 logging.exception("Meting kon niet worden opgeslagen")
@@ -360,24 +307,36 @@ def report(day, period, kind, source):
             params += (source,)
         buckets = db.execute(sql + " GROUP BY bucket ORDER BY bucket", params).fetchall()
         first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
-        destinations = []
-        if kind == "app" and source:
-            matching = db.execute("""
+        destinations, matching = [], []
+        if kind == "host" or (kind == "app" and source):
+            if kind == "host":
+                clause = "app = ?" if source else "app GLOB ?"
+                owner = "@host:" + (source or "*")
+            else:
+                clause = "app = ?"
+                owner = source
+            matching = db.execute(f"""
                 SELECT ip, protocol, port, domain, evidence, SUM(rx) AS rx, SUM(tx) AS tx
-                FROM app_destinations WHERE app = ? AND day >= ? AND day < ?
+                FROM app_destinations WHERE {clause} AND day >= ? AND day < ?
                 GROUP BY ip, protocol, port, domain, evidence
                 ORDER BY SUM(rx + tx) DESC, ip, protocol, port, domain, evidence LIMIT 101
-            """, (source, *bounds[:2])).fetchall()
+            """, (owner, *bounds[:2])).fetchall()
             for row in matching[:100]:
                 item = dict(row)
                 number = item["protocol"]
                 item["protocol"] = PROTOCOLS.get(number, f"IP-protocol {number}" if number >= 0 else "")
+                try:
+                    address = ipaddress.ip_address(item["ip"])
+                except ValueError:
+                    item["scope"] = "—"
+                else:
+                    item["scope"] = "Publiek IP" if address.is_global and not address.is_multicast else "Lokaal / speciaal IP"
                 destinations.append(item)
     return {
         "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
         "rows": [dict(row) for row in leaders], "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
-        "destinations_truncated": kind == "app" and bool(source) and len(matching) > 100,
+        "destinations_truncated": len(matching) > 100,
     }
 
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- **Server** toont de grootste bronnen en bestemmingen op de serverinterface, inclusief verkeer dat niet afzonderlijk onder **Apps** zichtbaar is.
+- De tabel toont domein indien herkenbaar, IP-adres, adrestype, protocol, poort en upload en download. Bestaande totalen blijven bewaard.
+
 ## 0.4.0
 
 - HA-Bandwidth leest WAN-upload en -download rechtstreeks uit OpenWrt via ubus.

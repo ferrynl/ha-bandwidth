@@ -23,6 +23,10 @@ Eerder ingestelde cumulatieve Home Assistant-sensoren blijven bruikbaar als `ope
 
 Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen.
 
+## Bronnen en bestemmingen van de server
+
+Op **Server** staan vanaf 0.5.0 de grootste IP-bronnen en -bestemmingen op de gekozen serverinterface. De tabel omvat ook zichtbaar verkeer van Home Assistant Core en andere software op het gedeelde hostnetwerk. Ze wijst dat verkeer niet toe aan een proces of integratie. Bij download is het adres de bron en bij upload de bestemming. De aanduiding Publiek IP of Lokaal / speciaal IP is gebaseerd op de adresruimte. De optie `track_peers` bestuurt deze meting.
+
 ## Bestemmingen per app
 
 Kies **Apps** en klik op een appnaam. Het detailoverzicht volgt de ingestelde dag, week, maand of het jaar. Per regel zie je het domein, het IP-adres, het IP-protocol (zoals TCP of UDP), de poort van de wederpartij en de gemeten download en upload. De tabel toont maximaal 100 regels, gesorteerd op verbruik.

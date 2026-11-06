@@ -106,31 +106,35 @@ function table(rows) {
 
 function showDestinations(data) {
   const section = el("destinations");
-  section.hidden = kind !== "app" || !source;
+  section.hidden = kind !== "host" && (kind !== "app" || !source);
   if (section.hidden) {
     focusDestinations = false;
     return;
   }
   const title = el("destinations-title");
-  title.textContent = "Bestemmingen · " + sourceLabel;
+  title.textContent = kind === "host" ? "Grootste bronnen en bestemmingen van de server" : "Bestemmingen · " + sourceLabel;
   const rows = data.destinations;
   const body = el("destination-rows");
   body.replaceChildren();
   el("destinations-table").hidden = rows.length === 0;
   let note = "Waargenomen IP-verkeer. TLS geeft een zichtbare domeinnaam aan. DNS is een aanwijzing.";
   if (rows.length === 0) {
-    note = data.status.app_destinations_enabled === false
-      ? "De meting van app-bestemmingen staat uit."
-      : "Geen bestemmingen gemeten voor deze app en periode.";
-  } else if (data.destinations_truncated) {
-    note += " De tabel toont de 100 grootste regels.";
+    const enabled = kind === "host" ? data.status.peers_enabled : data.status.app_destinations_enabled;
+    note = enabled === false
+      ? "De bestemmingsmeting staat uit."
+      : kind === "host"
+        ? "Nog geen bronnen of bestemmingen gemeten voor deze periode. De serverdetails beginnen bij versie 0.5.0."
+        : "Geen bestemmingen gemeten voor deze app en periode.";
+  } else {
+    if (kind === "host") note += " Bij download zie je het bron-IP. Bij upload zie je het doel-IP.";
+    if (data.destinations_truncated) note += " De tabel toont de 100 grootste regels.";
   }
   el("destinations-note").textContent = note;
   for (const row of rows) {
     const tr = body.insertRow();
     const domain = row.domain ? row.domain + " (" + row.evidence + ")" : "Onbekend";
     for (const value of [
-      domain, row.ip || "Overige verbindingen", row.protocol || "—",
+      domain, row.ip || "Overige verbindingen", row.scope, row.protocol || "—",
       row.port >= 0 ? row.port : "—", bytes(row.rx), bytes(row.tx), bytes(row.rx + row.tx),
     ]) tr.insertCell().textContent = value;
   }
