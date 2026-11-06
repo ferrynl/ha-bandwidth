@@ -22,7 +22,11 @@ button:hover,button[aria-pressed=true]{background:#2b4667;border-color:var(--rx)
 .totals h2{font-size:clamp(.75rem,2vw,1.1rem);color:var(--muted)}
 .rx{color:var(--rx)}.tx{color:var(--tx)}
 .legend{display:flex;gap:1rem;flex-wrap:wrap}
-.modem-rx{color:#74e9ad}.modem-tx{color:#ffca72}
+.modem-rx{color:#b5ed62}.modem-tx{color:#ffca58}
+#comparison-legend span{display:inline-flex;align-items:center;gap:.4em}
+#comparison-legend span::before{content:"";width:1.25em;border-top:2px solid currentColor}
+#comparison-legend :is(.modem-rx,.modem-tx)::before{border-top-style:dashed}
+#comparison-legend :is(.cellular-rx,.cellular-tx)::before{border-top-style:dotted}
 .action{display:inline-block;color:var(--text);background:#15243a;border:1px solid var(--line);border-radius:9px;padding:.45em .75em;margin:.35em .3em .35em 0}
 #restore-form{display:grid;gap:.65rem;justify-items:start;margin:1rem 0}
 #restore-file{max-width:100%}
@@ -36,7 +40,10 @@ button:hover,button[aria-pressed=true]{background:#2b4667;border-color:var(--rx)
 .plot-zero{stroke:var(--muted);stroke-width:1.2}
 .plot-cursor{stroke:#fff;stroke-opacity:.65}
 .plot-area{fill:currentColor;fill-opacity:.33}
-.plot-outline{fill:none;stroke:currentColor;stroke-width:1.4}
+.plot-outline{fill:none;stroke:currentColor;stroke-width:1.6}
+#comparison-legend:not([hidden]) ~ .plot-shell .plot-area{fill-opacity:.16}
+.plot-outline:is(.modem-rx,.modem-tx){stroke-dasharray:7 4}
+.plot-outline:is(.cellular-rx,.cellular-tx){stroke-dasharray:1 4;stroke-linecap:round}
 #legend .rx,#chart .rx{color:#b5d754}
 #legend .tx,#chart .tx{color:#a69af6}
 #comparison-legend:not([hidden]) ~ .plot-shell .rx{color:var(--rx)}
@@ -80,4 +87,4 @@ nav + p{margin-top:.6rem}
 @media(max-width:480px){main{padding:12px}.totals{gap:.35rem}.totals .card{padding:9px}}
 
 
-.cellular-rx{color:#64e7ca}.cellular-tx{color:#f1a4eb}
+.cellular-rx{color:#ff8175}.cellular-tx{color:#edf4ff}

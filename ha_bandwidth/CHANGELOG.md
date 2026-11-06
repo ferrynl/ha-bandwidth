@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.4
+
+- De vergelijkingsgrafiek gebruikt beter onderscheidbare kleuren en per bron een eigen lijnstijl. Lichtere vlakken en lijnen op de voorgrond verbeteren de leesbaarheid bij overlap.
+
 ## 0.10.3
 
 - Download staat als vlak boven de nullijn en upload eronder. Ontbrekende metingen blijven open en de waarden per tijdvak zijn opvraagbaar.

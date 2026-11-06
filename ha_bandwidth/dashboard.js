@@ -208,6 +208,7 @@ function timeline(data) {
   }
   el("axis").replaceChildren(...axis);
   const zero = y(0);
+  const seriesOutlines = [];
   for (const [prefix, series] of sources) {
     for (const [direction, sign] of [["rx", 1], ["tx", -1]]) {
       const areas = [];
@@ -230,10 +231,11 @@ function timeline(data) {
       });
       finish();
       const color = prefix + direction;
-      graph.append(svg("path", {d: areas.join(" "), class: "plot-area " + color}),
-        svg("path", {d: outlines.join(" "), class: "plot-outline " + color}));
+      graph.append(svg("path", {d: areas.join(" "), class: "plot-area " + color}));
+      seriesOutlines.push(svg("path", {d: outlines.join(" "), class: "plot-outline " + color}));
     }
   }
+  graph.append(...seriesOutlines);
   graph.append(svg("line", {x1: 0, x2: width, y1: zero, y2: zero, class: "plot-zero"}));
   const cursor = svg("line", {y1: 0, y2: 240, class: "plot-cursor", visibility: "hidden"});
   graph.append(cursor);
@@ -360,10 +362,10 @@ function showDestinations(data) {
 function showComparison(data) {
   const body = el("comparison-rows");
   body.replaceChildren();
-  el("router-download-legend").textContent = "● " + data.router_label + " download";
-  el("router-upload-legend").textContent = "● " + data.router_label + " upload";
-  el("cellular-download-legend").textContent = "● " + data.modem_label + " download";
-  el("cellular-upload-legend").textContent = "● " + data.modem_label + " upload";
+  el("router-download-legend").textContent = data.router_label + " download";
+  el("router-upload-legend").textContent = data.router_label + " upload";
+  el("cellular-download-legend").textContent = data.modem_label + " download";
+  el("cellular-upload-legend").textContent = data.modem_label + " upload";
   for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.router_buckets], [data.modem_label, data.modem_buckets]]) {
     const row = body.insertRow();
     row.insertCell().textContent = label;
