@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+
+- IP-adressen in **Server**, **Apps** en **IP-adressen** tonen de huidige apparaatnaam en het MAC-adres uit OpenWrt, indien bekend.
+- Dubbelzinnige IP-adressen krijgen geen apparaatkoppeling. Apparaatnamen en MAC-adressen zijn doorzoekbaar in de tabellen.
+
 ## 0.7.0
 
 - Zoek en sorteer in alle verkeerstabellen. Klik op een kolomkop om de sorteerrichting te wijzigen.

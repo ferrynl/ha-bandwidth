@@ -15,6 +15,10 @@ Gebruik de zoekbalk boven een verkeerstabel en klik op een kolomkop om te sorter
 
 Vul bij **HA-Bandwidth → Configuratie** je IPinfo Lite-token in bij `ipinfo_token`, sla op en herstart de app. Klik naast een publiek IP-adres op **IPinfo** om het ASN, de netwerkorganisatie en het organisatiedomein op te zoeken. Alleen een aangeklikt publiek adres wordt naar IPinfo gestuurd. Het organisatiedomein komt van IPinfo en kan verschillen van het TLS- of DNS-domein dat in het verkeer is waargenomen. [IPinfo Lite](https://ipinfo.io/developers/lite-api)
 
+## Lokale IP-adressen herkennen
+
+Met de bestaande OpenWrt-verbinding toont HA-Bandwidth bij bekende IP-adressen de apparaatnaam en het MAC-adres uit `luci-rpc.getHostHints`. Dit werkt in **Server**, **Apps** en **IP-adressen**. Het routeraccount moet de methode mogen lezen. De namen worden gekoppeld op basis van de huidige routerlijst en kunnen afwijken voor oudere metingen als een adres intussen opnieuw is toegewezen. Een adres dat OpenWrt aan meer dan één MAC-adres koppelt, krijgt geen apparaatnaam.
+
 ## OpenWrt vergelijken
 
 Vul op het tabblad **Configuratie** van HA-Bandwidth het LAN-adres van je OpenWrt-router in bij `openwrt_url` (bijvoorbeeld `http://192.168.1.1`). Vul de gebruikersnaam en het wachtwoord van de router in bij `openwrt_username` en `openwrt_password`. Laat `openwrt_interface` op `wan` staan als dat de naam van je WAN-interface is. Sla op, herstart de app en open **OpenWrt vergelijken**.

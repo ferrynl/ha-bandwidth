@@ -92,6 +92,15 @@ function countCells(row, rx, tx, available = true) {
   }
 }
 
+function addRouterHost(cell, host) {
+  if (!host) return;
+  const label = document.createElement("span");
+  label.className = "ip-result";
+  label.textContent = [host.name || "Apparaat zonder naam", host.mac].filter(Boolean).join(" · ");
+  label.title = "Huidige apparaatkoppeling uit OpenWrt";
+  cell.append(label);
+}
+
 function addIpLookup(cell, ip, tableId) {
   if (!ip) return;
   const button = document.createElement("button");
@@ -228,6 +237,7 @@ function table(rows) {
     tr.dataset.search = row.source;
     const cell = tr.insertCell();
     cell.append(button);
+    addRouterHost(cell, row.router_host);
     addIpLookup(cell, row.lookup_ip, "rows");
     countCells(tr, row.rx, row.tx);
   }
@@ -257,6 +267,7 @@ function showDestinations(data) {
         : "Geen bestemmingen gemeten voor deze app en periode.";
   } else {
     if (kind === "host") note += " Bij download zie je het bron-IP. Bij upload zie je het doel-IP.";
+    if (rows.some(row => row.router_host)) note += " Apparaatnamen en MAC-adressen komen uit de huidige OpenWrt-lijst.";
     if (data.destinations_truncated) note += " De tabel toont de 100 grootste regels.";
   }
   el("destinations-note").textContent = note;
@@ -266,6 +277,7 @@ function showDestinations(data) {
     tr.insertCell().textContent = domain;
     const ipCell = tr.insertCell();
     ipCell.textContent = row.ip || "Overige verbindingen";
+    addRouterHost(ipCell, row.router_host);
     addIpLookup(ipCell, row.lookup_ip, "destination-rows");
     tr.insertCell().textContent = row.scope;
     tr.insertCell().textContent = row.protocol || "—";
@@ -308,6 +320,9 @@ function show(data) {
       (data.first ? " · historie vanaf " + data.first.slice(0, 10) : "")
     : "Wachten op de eerste meetronde";
   const warnings = [...(status.errors || [])];
+  if (["host", "peer", "app"].includes(kind) && status.host_hints_error) {
+    warnings.push("OpenWrt-apparaatnamen niet beschikbaar. " + status.host_hints_error);
+  }
   if (kind === "device") {
     if (status.device_error) warnings.push(status.device_error);
     else if (status.device_configured === false) warnings.push("Stel OpenWrt in onder HA-Bandwidth → Configuratie.");

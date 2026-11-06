@@ -120,17 +120,16 @@ class OpenWrt:
             raise ValueError("OpenWrt Bandwidth Monitor gaf een onverwacht antwoord.")
         return data
 
-    def device_readings(self):
+    def host_hints(self):
+        url = ubus_url(self.settings.get("openwrt_url", ""))
+        return self.call(url, self.session, "luci-rpc", "getHostHints", {})
+
+    def device_readings(self, hints):
         periods = self.nlbw_query("periods").get("periods")
         if not isinstance(periods, list) or not periods:
             raise ValueError("OpenWrt Bandwidth Monitor heeft nog geen meetperiode.")
         period = max(date.fromisoformat(value).isoformat() for value in periods if isinstance(value, str))
         data = self.nlbw_query("download", "-g", "mac,ip")
-        url = ubus_url(self.settings.get("openwrt_url", ""))
-        try:
-            hints = self.call(url, self.session, "luci-rpc", "getHostHints", {})
-        except (OSError, ValueError):
-            hints = {}
         return device_counters(data, hints, period)
 
     def reading(self):
@@ -148,6 +147,45 @@ class OpenWrt:
             self.login(url)
             return self.counters(url, interface)
 
+
+
+def hosts_by_ip(hints, router_url):
+    addresses = {}
+    conflicts = set()
+    for raw_mac, info in hints.items():
+        mac = raw_mac.lower()
+        if not MAC.fullmatch(mac) or mac == "00:00:00:00:00:00" or not isinstance(info, dict):
+            continue
+        name = info.get("name")
+        name = name.strip()[:120] if isinstance(name, str) else ""
+        for field in ("ipaddrs", "ip6addrs"):
+            values = info.get(field)
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                if not isinstance(value, str):
+                    continue
+                try:
+                    ip = ipaddress.ip_address(value)
+                except ValueError:
+                    continue
+                if ip.is_unspecified or ip.is_multicast or getattr(ip, "scope_id", None):
+                    continue
+                key = str(ip)
+                if key in addresses and addresses[key]["mac"] != mac:
+                    conflicts.add(key)
+                addresses[key] = {"name": name, "mac": mac}
+    for key in conflicts:
+        addresses.pop(key, None)
+    try:
+        router = str(ipaddress.ip_address(urlsplit(router_url.strip()).hostname))
+    except ValueError:
+        pass
+    else:
+        device = addresses.setdefault(router, {"name": "", "mac": ""})
+        if not device["name"]:
+            device["name"] = "OpenWrt-router"
+    return addresses
 
 
 def device_counters(data, hints, period):

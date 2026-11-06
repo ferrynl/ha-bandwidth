@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import modem_reading
-from openwrt import NoRedirect, OpenWrt
+from openwrt import NoRedirect, OpenWrt, hosts_by_ip
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -33,6 +33,7 @@ OPTIONS = DATA / "options.json"
 SETTINGS = json.loads(OPTIONS.read_text(encoding="utf-8")) if OPTIONS.exists() else {}
 ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
 STATUS = {}
+ROUTER_HOSTS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
@@ -179,7 +180,7 @@ def record(now, rows, prune, destinations=()):
 
 
 def collect():
-    global STATUS
+    global STATUS, ROUTER_HOSTS
     previous, capture, last_day = {}, None, None
     app_destinations = AppDestinations()
     track_apps = SETTINGS.get("track_app_destinations", True)
@@ -229,15 +230,21 @@ def collect():
                     readings.append(modem_reading(SETTINGS))
             except (OSError, URLError, ValueError, http.client.HTTPException) as error:
                 router_error = str(error)
-            device_error = ""
+            device_error, host_hints_error = "", ""
+            hints = {}
             if openwrt:
                 if openwrt.session:
                     try:
-                        readings.extend(openwrt.device_readings())
+                        hints = openwrt.host_hints()
+                    except (OSError, ValueError, http.client.HTTPException) as error:
+                        host_hints_error = str(error)
+                    try:
+                        readings.extend(openwrt.device_readings(hints))
                     except (OSError, ValueError, http.client.HTTPException) as error:
                         device_error = str(error)
                 else:
-                    device_error = router_error
+                    device_error = host_hints_error = router_error
+            ROUTER_HOSTS = hosts_by_ip(hints, SETTINGS.get("openwrt_url", "")) if openwrt else {}
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -266,6 +273,7 @@ def collect():
                 "router_configured": OPENWRT_ENABLED or modem_configured, "router_error": router_error,
                 "router_device": openwrt.device if openwrt and not router_error else "",
                 "device_configured": OPENWRT_ENABLED, "device_error": device_error,
+                "host_hints_error": host_hints_error,
             }
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
@@ -283,6 +291,7 @@ def period_bounds(day, period):
 
 
 def report(day, period, kind, source):
+    router_hosts = ROUTER_HOSTS
     start, end = period_bounds(day, period)
     bounds = (start.isoformat(), end.isoformat(), kind)
     if kind == "compare":
@@ -344,10 +353,15 @@ def report(day, period, kind, source):
                 else:
                     item["scope"] = "Publiek IP" if address.is_global and not address.is_multicast else "Lokaal / speciaal IP"
                 item["lookup_ip"] = public_ip(item["ip"])
+                item["router_host"] = router_hosts.get(item["ip"])
                 destinations.append(item)
     return {
         "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
-        "rows": [dict(row, lookup_ip=public_ip(row["source"]) if kind == "peer" else None) for row in leaders],
+        "rows": [
+            dict(row, lookup_ip=public_ip(row["source"]), router_host=router_hosts.get(row["source"]))
+            if kind == "peer" else dict(row)
+            for row in leaders
+        ],
         "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
