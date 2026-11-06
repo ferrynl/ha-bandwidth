@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.6
+
+- Vergelijk de bestaande Home Assistant-modemtellers naast OpenWrt WAN en de HA-server.
+
 ## 0.9.5
 
 - Optioneel modem tussen internet en OpenWrt op de netwerkkaart, met instelbare naam en beheer-IP.

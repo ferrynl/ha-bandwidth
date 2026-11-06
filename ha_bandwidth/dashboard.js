@@ -163,6 +163,7 @@ function bytes(value) {
 
 function timeline(data) {
   const values = new Map(data.buckets.map(row => [row.bucket, row]));
+  const router = new Map((data.router_buckets || []).map(row => [row.bucket, row]));
   const modem = new Map((data.modem_buckets || []).map(row => [row.bucket, row]));
   const slots = [];
   if (period === "day") {
@@ -182,7 +183,7 @@ function timeline(data) {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
-  const peak = Math.max(1, ...[...values.values(), ...modem.values()].flatMap(row => [row.rx, row.tx]));
+  const peak = Math.max(1, ...[...values.values(), ...router.values(), ...modem.values()].flatMap(row => [row.rx, row.tx]));
   const axis = [1, .75, .5, .25, 0].map(fraction => {
     const label = document.createElement("span");
     label.textContent = bytes(peak * fraction);
@@ -191,19 +192,22 @@ function timeline(data) {
   el("axis").replaceChildren(...axis);
   el("chart").replaceChildren(...slots.map(([key, tick]) => {
     const value = values.get(key);
-    const wan = modem.get(key);
+    const wan = router.get(key);
+    const cellular = modem.get(key);
     const group = document.createElement("div");
     group.className = "bucket";
     const summary = [];
     if (value) summary.push((kind === "compare" ? "HA " : "") + "Download " + bytes(value.rx) + " / Upload " + bytes(value.tx));
     if (wan) summary.push(data.router_label + " download " + bytes(wan.rx) + " / upload " + bytes(wan.tx));
+    if (cellular) summary.push(data.modem_label + " download " + bytes(cellular.rx) + " / upload " + bytes(cellular.tx));
     group.title = key + " · " + (summary.join(" · ") || "Geen meting");
     if (summary.length) group.tabIndex = 0;
     group.setAttribute("aria-label", group.title);
     const columns = document.createElement("div");
     columns.className = "columns";
     const series = [["rx", value?.rx], ["tx", value?.tx]];
-    if (kind === "compare") series.push(["modem-rx", wan?.rx], ["modem-tx", wan?.tx]);
+    if (kind === "compare") series.push(["modem-rx", wan?.rx], ["modem-tx", wan?.tx],
+      ["cellular-rx", cellular?.rx], ["cellular-tx", cellular?.tx]);
     for (const [direction, count] of series) {
       const bar = document.createElement("span");
       bar.className = "bar " + direction;
@@ -304,7 +308,9 @@ function showComparison(data) {
   body.replaceChildren();
   el("router-download-legend").textContent = "● " + data.router_label + " download";
   el("router-upload-legend").textContent = "● " + data.router_label + " upload";
-  for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.modem_buckets]]) {
+  el("cellular-download-legend").textContent = "● " + data.modem_label + " download";
+  el("cellular-upload-legend").textContent = "● " + data.modem_label + " upload";
+  for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.router_buckets], [data.modem_label, data.modem_buckets]]) {
     const row = body.insertRow();
     row.insertCell().textContent = label;
     const rx = values.reduce((total, item) => total + item.rx, 0);
@@ -313,9 +319,12 @@ function showComparison(data) {
   }
   updateTable("comparison-rows");
   const device = data.status.router_device ? "OpenWrt-interface actief: " + data.status.router_device + "." : "";
-  el("modem-status").textContent = data.status.router_error || (!data.status.router_configured
-    ? "Stel openwrt_url, openwrt_username en openwrt_password in onder HA-Bandwidth → Configuratie."
-    : data.modem_buckets.length ? device : [device, "Nog geen WAN-metingen voor deze periode."].filter(Boolean).join(" "));
+  const routerStatus = data.status.router_error || (data.status.router_configured
+    ? device : "OpenWrt is niet ingesteld.");
+  const modemStatus = data.status.modem_error || (!data.status.modem_configured
+    ? "Vul modem_download_entity en modem_upload_entity in bij Configuratie."
+    : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
+  el("modem-status").textContent = [routerStatus, modemStatus].filter(Boolean).join(" · ");
 }
 
 const map = el("topology-map");
@@ -584,7 +593,7 @@ function show(data) {
   if (comparing) showComparison(data);
   const rx = data.buckets.reduce((total, row) => total + row.rx, 0);
   const tx = data.buckets.reduce((total, row) => total + row.tx, 0);
-  const hasData = data.buckets.length > 0 || Boolean(data.modem_buckets?.length);
+  const hasData = data.buckets.length > 0 || Boolean(data.router_buckets?.length || data.modem_buckets?.length);
   el("download").textContent = hasData ? bytes(rx) : "—";
   el("upload").textContent = hasData ? bytes(tx) : "—";
   el("total").textContent = hasData ? bytes(rx + tx) : "—";

@@ -223,14 +223,17 @@ def collect():
                 except (OSError, http.client.HTTPException, ValueError) as error:
                     destinations, _ = app_destinations.collect({})
                     errors.append(f"App-bestemmingen: {error}")
-            router_error = ""
-            try:
-                if openwrt:
+            router_error, modem_error = "", ""
+            if openwrt:
+                try:
                     readings.append(openwrt.reading())
-                elif modem_configured:
+                except (OSError, URLError, ValueError, http.client.HTTPException) as error:
+                    router_error = str(error)
+            if modem_configured:
+                try:
                     readings.append(modem_reading(SETTINGS))
-            except (OSError, URLError, ValueError, http.client.HTTPException) as error:
-                router_error = str(error)
+                except (OSError, URLError, ValueError, http.client.HTTPException) as error:
+                    modem_error = str(error)
             device_error, host_hints_error = "", ""
             hints = {}
             if openwrt:
@@ -279,7 +282,8 @@ def collect():
                 "shared": shared, "unavailable": unavailable, "zone": ZONE.key,
                 "peers_enabled": SETTINGS.get("track_peers", True),
                 "app_destinations_enabled": track_apps,
-                "router_configured": OPENWRT_ENABLED or modem_configured, "router_error": router_error,
+                "router_configured": OPENWRT_ENABLED, "router_error": router_error,
+                "modem_configured": modem_configured, "modem_error": modem_error,
                 "router_device": openwrt.device if openwrt and not router_error else "",
                 "device_configured": OPENWRT_ENABLED, "device_error": device_error,
                 "host_hints_error": host_hints_error,
@@ -323,21 +327,20 @@ def report(day, period, kind, source):
     start, end = period_bounds(day, period)
     bounds = (start.isoformat(), end.isoformat(), kind)
     if kind == "compare":
-        router_kind = "openwrt" if OPENWRT_ENABLED else "modem"
         with closing(database()) as db:
             rows = db.execute("""
                 SELECT substr(hour, 1, ?) AS bucket, kind, SUM(rx) AS rx, SUM(tx) AS tx
-                FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ('host', ?)
+                FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ('host', 'openwrt', 'modem')
                 GROUP BY bucket, kind ORDER BY bucket
-            """, (PERIODS[period], *bounds[:2], router_kind)).fetchall()
+            """, (PERIODS[period], *bounds[:2])).fetchall()
             first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
         return {
             "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
             "buckets": [dict(row) for row in rows if row["kind"] == "host"],
-            "modem_buckets": [dict(row) for row in rows if row["kind"] == router_kind],
-            "router_label": "OpenWrt WAN" if OPENWRT_ENABLED or not any(
-                SETTINGS.get(key, "").strip() for key in ("modem_download_entity", "modem_upload_entity")
-            ) else "WAN via HA-sensoren",
+            "router_buckets": [dict(row) for row in rows if row["kind"] == "openwrt"],
+            "modem_buckets": [dict(row) for row in rows if row["kind"] == "modem"],
+            "router_label": "OpenWrt WAN",
+            "modem_label": SETTINGS.get("upstream_modem_name", "").strip() or "5G-modem via HA",
             "status": STATUS, "first": first,
         }
     with closing(database()) as db, db:

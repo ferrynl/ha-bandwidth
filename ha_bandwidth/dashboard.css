@@ -65,3 +65,6 @@ td button{max-width:min(40vw,450px);text-overflow:ellipsis;overflow:hidden}
 nav + p{margin-top:.6rem}
 @media(max-width:480px){main{padding:12px}.totals{gap:.35rem}.totals .card{padding:9px}}
 
+
+.cellular-rx{color:#64e7ca}.cellular-tx{color:#f1a4eb}
+.bar.cellular-rx{background:#64e7ca}.bar.cellular-tx{background:#f1a4eb}
