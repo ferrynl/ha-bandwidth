@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- Vermeld de HTTP-status van een mislukte Zyxel-login en een eventuele Zyxel-resultaatcode, zonder inloggegevens of sessiegegevens te loggen.
+
 ## 0.10.0
 
 - Optionele rechtstreekse Zyxel-uitlezing via `Traffic_Status` voor Cellular WAN 1 en 2.

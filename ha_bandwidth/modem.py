@@ -103,6 +103,26 @@ class DirectZyxel:
     def __init__(self, settings):
         self.settings = settings
         self.router = None
+        self.login_status = None
+        self.login_result = ""
+
+    def observe_login(self, response, **_kwargs):
+        if urlsplit(response.url).path != "/UserLogin":
+            return
+        self.login_status = response.status_code
+        try:
+            payload = response.json()
+        except ValueError:
+            return
+        result = payload.get("result") if isinstance(payload, dict) else None
+        if isinstance(result, str) and re.fullmatch(r"ZCFG_[A-Z0-9_]{1,48}", result):
+            self.login_result = result
+
+    def login_error(self):
+        if self.login_status is None:
+            return "De Zyxel gaf geen HTTP-antwoord op /UserLogin."
+        result = f", {self.login_result}" if self.login_result else ""
+        return f"Zyxel-inloggen mislukt: /UserLogin HTTP {self.login_status}{result}; geen geldige sessiesleutel."
 
     def readings(self):
         from nr7101 import nr7101
@@ -123,11 +143,19 @@ class DirectZyxel:
         for attempt in range(2):
             try:
                 if self.router is None:
-                    options = VerifiedRequestOptions(verify=verify, timeout=5, allow_redirects=False)
+                    self.login_status = None
+                    self.login_result = ""
+                    options = VerifiedRequestOptions(
+                        verify=verify, timeout=5, allow_redirects=False,
+                        hooks={"response": self.observe_login},
+                    )
                     self.router = nr7101.NR7101(address.rstrip("/"), username, password, options)
-                    if not self.router.login() or not self.router.sessionkey:
-                        self.router = None
-                        raise PermissionError
+                    try:
+                        logged_in = self.router.login()
+                    except (KeyError, ValueError) as error:
+                        raise PermissionError(self.login_error()) from error
+                    if not logged_in or not self.router.sessionkey:
+                        raise PermissionError(self.login_error())
                 data = self.router.get_json_object("Traffic_Status")
                 if data is not None:
                     break
@@ -137,9 +165,9 @@ class DirectZyxel:
             except Timeout:
                 self.router = None
                 raise ValueError("De Zyxel-API reageert niet op tijd.") from None
-            except PermissionError:
+            except PermissionError as error:
                 self.router = None
-                raise ValueError("Zyxel-inloggen mislukt. Controleer de modem-inloggegevens.") from None
+                raise ValueError(str(error)) from None
             except Exception:
                 if attempt:
                     self.router = None
