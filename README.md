@@ -31,7 +31,7 @@ Eerder ingestelde cumulatieve Home Assistant-sensoren blijven bruikbaar als `ope
 
 ## Netwerkdiagram
 
-Op **Apparaten** verbindt het diagram internet, OpenWrt en de apparaten die de router kent of waarvoor in de gekozen periode verkeer is gemeten. Wifi-clients die OpenWrt rechtstreeks ziet, worden per SSID gegroepeerd. Bij andere apparaten geeft de lijn alleen de logische route via OpenWrt weer. Het diagram kan de fysieke poort of route via een losse switch, mesh-node of accesspoint niet afleiden. Klik op een gemeten apparaat om de verkeersgrafiek te selecteren.
+Op **Apparaten** verbindt het diagram internet, OpenWrt en de apparaten die de router kent of waarvoor in de gekozen periode verkeer is gemeten. Wifi-clients die OpenWrt rechtstreeks ziet, worden per SSID gegroepeerd. Bij andere apparaten geeft de lijn alleen de logische route via OpenWrt weer. Het diagram kan de fysieke poort of route via een losse switch, mesh-node of accesspoint niet afleiden. Zoek in de apparatenwolk op naam, IP of MAC. Klik op een apparaat voor de details en kies daarna **Toon verkeersgrafiek** als er metingen zijn.
 
 ## Verkeer per apparaat
 

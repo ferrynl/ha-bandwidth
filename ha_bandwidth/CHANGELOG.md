@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1
+
+- Compacte apparatenwolk met zoekveld, gegroepeerd per wifi-netwerk of onbekende verbinding.
+- IP-, MAC- en verkeersdetails verschijnen bij selectie van een apparaat.
+
 ## 0.9.0
 
 - Bekende OpenWrt-apparaatnamen staan in de kolom **Domein / apparaat**. Het MAC-adres blijft onder het IP-adres zichtbaar.

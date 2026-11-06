@@ -81,12 +81,17 @@
   <section class="card" id="topology-panel" hidden>
     <h2>Netwerkdiagram</h2>
     <p id="topology-note"></p>
-    <div class="topology-scroll">
-      <div class="topology">
-        <div class="topology-node">Internet</div>
-        <div class="topology-node topology-router">OpenWrt</div>
-        <ul class="topology-branches" id="topology-branches"></ul>
-      </div>
+    <input id="topology-search" class="table-filter" type="search" placeholder="Zoek op naam, IP of MAC…" aria-label="Zoek in de apparatenwolk">
+    <div class="topology-cloud" id="topology-cloud">
+      <div class="topology-route"><span>Internet</span><span aria-hidden="true">↔</span><strong>OpenWrt</strong></div>
+      <ul class="topology-branches" id="topology-branches"></ul>
+      <p id="topology-no-match" hidden>Geen apparaten gevonden.</p>
+    </div>
+    <div id="topology-detail" class="topology-detail" hidden>
+      <strong id="topology-device-name"></strong>
+      <span id="topology-device-address"></span>
+      <span id="topology-device-traffic"></span>
+      <button type="button" id="topology-graph">Toon verkeersgrafiek</button>
     </div>
   </section>
   <section class="card history">

@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.9.0"
+version: "0.9.1"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:

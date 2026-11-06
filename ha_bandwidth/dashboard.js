@@ -318,6 +318,25 @@ function showComparison(data) {
     : data.modem_buckets.length ? device : [device, "Nog geen WAN-metingen voor deze periode."].filter(Boolean).join(" "));
 }
 
+let topologySelection = "";
+
+function filterTopology() {
+  const query = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
+  let matches = 0;
+  for (const branch of el("topology-branches").children) {
+    let visible = 0;
+    for (const item of branch.querySelectorAll("[data-search]")) {
+      item.hidden = !item.dataset.search.includes(query);
+      if (!item.hidden) visible++;
+    }
+    branch.hidden = visible === 0;
+    matches += visible;
+  }
+  el("topology-no-match").hidden = matches > 0;
+}
+
+el("topology-search").addEventListener("input", filterTopology);
+
 function showTopology(data) {
   const panel = el("topology-panel");
   panel.hidden = kind !== "device";
@@ -331,54 +350,71 @@ function showTopology(data) {
 
   const branches = new Map();
   for (const device of devices.values()) {
-    const label = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
-    if (!branches.has(label)) branches.set(label, []);
-    branches.get(label).push(device);
+    const group = device.ssid ? "Wifi · " + device.ssid : "Verbinding onbekend";
+    if (!branches.has(group)) branches.set(group, []);
+    branches.get(group).push(device);
   }
   const container = el("topology-branches");
+  const focusedDevice = container.contains(document.activeElement) ? document.activeElement.dataset.device : "";
+  const buttons = new Map();
   container.replaceChildren();
   el("topology-note").textContent = devices.size
-    ? "Wifi toont clients die OpenWrt rechtstreeks op een accesspoint ziet. De lijnen bij onbekende verbindingen geven alleen de route via OpenWrt weer."
+    ? devices.size + " apparaten · Kies een apparaat voor details."
     : "Nog geen apparaten beschikbaar uit OpenWrt of voor deze meetperiode.";
-  container.parentElement.parentElement.hidden = devices.size === 0;
+  el("topology-cloud").hidden = devices.size === 0;
+  el("topology-search").hidden = devices.size === 0;
+
+  function selectDevice(id) {
+    topologySelection = id;
+    const device = devices.get(id);
+    const row = measured.get(id);
+    el("topology-detail").hidden = !device;
+    for (const [key, button] of buttons) button.setAttribute("aria-pressed", String(id === key));
+    if (!device) return;
+    el("topology-device-name").textContent = device.name || device.ips[0] || device.source;
+    el("topology-device-address").textContent = [...new Set([...device.ips, device.source])].join(" · ");
+    el("topology-device-traffic").textContent = row
+      ? "Download " + bytes(row.rx) + " · Upload " + bytes(row.tx)
+      : "Geen meting in deze periode.";
+    const graph = el("topology-graph");
+    graph.hidden = !row;
+    graph.onclick = row ? () => {
+      source = id;
+      sourceLabel = row.label;
+      load();
+      el("chart-title").scrollIntoView({block: "nearest"});
+    } : null;
+  }
 
   for (const [name, clients] of [...branches].sort(([a], [b]) => tableCollator.compare(a, b))) {
     const branch = document.createElement("li");
     const label = document.createElement("strong");
-    label.className = "topology-node";
-    label.textContent = name;
+    label.textContent = name + " (" + clients.length + ")";
     const list = document.createElement("ul");
     list.className = "topology-clients";
     clients.sort((a, b) => tableCollator.compare(a.name || a.source, b.name || b.source));
     for (const device of clients) {
-      const row = measured.get(device.source);
       const item = document.createElement("li");
-      const node = document.createElement(row ? "button" : "span");
-      node.className = "topology-node topology-client";
-      if (row) {
-        node.type = "button";
-        node.setAttribute("aria-pressed", String(device.source === source));
-        node.addEventListener("click", () => {
-          source = device.source;
-          sourceLabel = row.label;
-          load();
-          el("chart-title").scrollIntoView({block: "nearest"});
-        });
-      }
-      const heading = document.createElement("strong");
-      heading.textContent = device.name || device.ips[0] || device.source;
-      const address = document.createElement("small");
-      address.textContent = [...new Set([...device.ips, device.source])].join(" · ");
-      const traffic = document.createElement("small");
-      traffic.textContent = row ? "↓ " + bytes(row.rx) + " · ↑ " + bytes(row.tx) : "Geen meting in deze periode";
-      node.append(heading, address, traffic);
-      item.append(node);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "topology-chip";
+      button.dataset.device = device.source;
+      button.textContent = device.name || device.ips[0] || device.source;
+      button.title = button.textContent;
+      item.dataset.search = [button.textContent, device.source, name, ...device.ips].join(" ").toLocaleLowerCase("nl-NL");
+      button.addEventListener("click", () => selectDevice(topologySelection === device.source ? "" : device.source));
+      buttons.set(device.source, button);
+      item.append(button);
       list.append(item);
     }
     branch.append(label, list);
     container.append(branch);
   }
+  selectDevice(topologySelection);
+  filterTopology();
+  if (focusedDevice) buttons.get(focusedDevice)?.focus({preventScroll: true});
 }
+
 
 function show(data) {
   const status = data.status;
