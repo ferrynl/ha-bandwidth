@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HA-Bandwidth</title>
+<link rel="stylesheet" href="./dashboard.css">
+<script defer src="./dashboard.js"></script>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">HOME ASSISTANT · NETWERK</div>
+    <h1>HA-Bandwidth</h1>
+    <p id="status" role="status">Metingen ophalen…</p>
+  </header>
+  <nav aria-label="Meetbron">
+    <button type="button" data-kind="host" aria-pressed="true">Server</button>
+    <button type="button" data-kind="app" aria-pressed="false">Apps</button>
+    <button type="button" data-kind="peer" aria-pressed="false">IP-adressen</button>
+  </nav>
+  <p id="explanation"></p>
+  <div id="warnings" hidden></div>
+  <section class="controls" aria-label="Periode kiezen">
+    <nav aria-label="Periode">
+      <button type="button" data-period="day" aria-pressed="true">Dag</button>
+      <button type="button" data-period="week" aria-pressed="false">Week</button>
+      <button type="button" data-period="month" aria-pressed="false">Maand</button>
+      <button type="button" data-period="year" aria-pressed="false">Jaar</button>
+    </nav>
+    <label>Datum <input id="date" type="date"></label>
+    <button type="button" id="today">Vandaag</button>
+  </section>
+  <p id="range"></p>
+  <div class="totals">
+    <section class="card"><h2>Download</h2><strong id="download">—</strong></section>
+    <section class="card"><h2>Upload</h2><strong id="upload">—</strong></section>
+    <section class="card"><h2>Totaal</h2><strong id="total">—</strong></section>
+  </div>
+  <section class="card history">
+    <div class="section-head">
+      <h2 id="chart-title">Verkeer over tijd</h2>
+      <button type="button" id="clear" hidden>Alle bronnen</button>
+    </div>
+    <p class="legend"><span class="rx">● Download</span><span class="tx">● Upload</span></p>
+    <p id="empty" hidden>Voor deze periode zijn nog geen metingen opgeslagen.</p>
+    <div class="plot-shell">
+      <div id="axis" aria-hidden="true"></div>
+      <div id="chart" aria-label="Upload en download per tijdvak"></div>
+    </div>
+  </section>
+  <section class="card table-card">
+    <h2 id="ranking">Verkeer per netwerkinterface</h2>
+    <p id="ranking-detail">Klik op een regel om de grafiek en totalen op die bron te filteren.</p>
+    <div class="table-scroll">
+      <table><thead><tr><th scope="col">Bron</th><th scope="col">Download</th><th scope="col">Upload</th><th scope="col">Totaal</th></tr></thead>
+      <tbody id="rows"></tbody></table>
+    </div>
+  </section>
+  <section class="card" id="shared-section" hidden>
+    <h2>Containers met een gedeeld netwerk</h2>
+    <p id="shared"></p>
+    <p id="unavailable"></p>
+  </section>
+</main>
+</body>
+</html>
