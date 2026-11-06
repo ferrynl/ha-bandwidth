@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9
+
+- Maak onderscheid tussen ongewijzigde Zyxel-tellers en werkelijk gemeten verkeer.
+- Meld ontbrekende rechten voor de bridge-tabel en gebruik bekende wifi-poorten uit die tabel ook bij beperkte iwinfo-toegang.
+- Verberg de dubbele modemstip wanneer het geconfigureerde IP overeenkomt.
+
 ## 0.9.8
 
 - Herken bridge-poorten met `ifname` of `dev` in de OpenWrt-uitvoer.

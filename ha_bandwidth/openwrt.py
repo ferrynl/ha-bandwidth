@@ -141,6 +141,9 @@ class OpenWrt:
                 name = interface.get("ifname")
                 if name and INTERFACE.fullmatch(name) and config.get("mode") in (None, "ap"):
                     interfaces[name] = (config.get("ssid"), (radio.get("config") or {}).get("band"))
+        for name in set((bridge_ports or {}).values()):
+            if re.fullmatch(r"(?:wl|wlan|phy)[a-zA-Z0-9_-]*-(?:ap|mesh)[0-9]+", name):
+                interfaces.setdefault(name, (None, None))
         for name in optional("iwinfo", "devices", {}).get("devices", []):
             if isinstance(name, str) and INTERFACE.fullmatch(name):
                 interfaces.setdefault(name, (None, None))
@@ -185,7 +188,7 @@ class OpenWrt:
             "command": "/usr/sbin/bridge", "params": ["-j", "fdb", "show"],
         })
         if result.get("code") != 0:
-            return {}
+            raise ValueError("bridge fdb show kon niet worden uitgevoerd; controleer ip-bridge en rpcd-rechten.")
         ports = {}
         for row in json.loads(result.get("stdout", "[]")):
             mac = str(row.get("mac", "")).lower()
@@ -197,14 +200,19 @@ class OpenWrt:
         return {mac: next(iter(names)) for mac, names in ports.items() if len(names) == 1}
 
     def connection_links(self):
+        bridge_error = ""
         try:
             ports = self.bridge_ports()
-        except (OSError, ValueError):
+        except AccessDenied:
             ports = {}
+            bridge_error = "Routeraccount mag file.exec voor /usr/sbin/bridge -j fdb show niet uitvoeren."
+        except (OSError, ValueError) as error:
+            ports = {}
+            bridge_error = str(error)
         links = {mac: {"connection": "Via LAN-poort", "port": port}
                  for mac, port in ports.items() if re.fullmatch(r"lan[0-9]+", port)}
         links.update(self.wireless_links(ports))
-        return links
+        return links, bridge_error
 
     def device_readings(self, hints):
         periods = self.nlbw_query("periods").get("periods")

@@ -323,7 +323,8 @@ function showComparison(data) {
     ? device : "OpenWrt is niet ingesteld.");
   const modemStatus = data.status.modem_error || (!data.status.modem_configured
     ? "Vul modem_download_entity en modem_upload_entity in bij Configuratie."
-    : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
+    : data.status.modem_phase ? data.modem_label + ": " + data.status.modem_phase + "."
+      : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
   el("modem-status").textContent = [routerStatus, modemStatus].filter(Boolean).join(" · ");
 }
 
@@ -438,10 +439,17 @@ function showTopology(data) {
   graphData = data;
   if (pointers.size) return;
 
+  const modem = data.upstream_modem;
+  const modemIp = (modem?.ip || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
   const measured = new Map(data.rows.map(row => [row.source, row]));
   const devices = new Map(data.topology.map(device => [device.source, device]));
   for (const row of data.rows) {
     if (!devices.has(row.source)) devices.set(row.source, {source: row.source, name: row.label, ips: [], ssid: ""});
+  }
+  if (modem?.name && modemIp) {
+    for (const [id, device] of devices) {
+      if (id === modemIp || device.ips.includes(modemIp)) devices.delete(id);
+    }
   }
   const search = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
   const groups = new Map();
@@ -519,7 +527,6 @@ function showTopology(data) {
   }
 
   if (groups.size) {
-    const modem = data.upstream_modem;
     const internet = add("internet", "Internet", "internet", 0, modem?.name ? -165 : -105);
     const upstream = modem?.name
       ? add("upstream-modem", [modem.name, modem.ip].filter(Boolean).join(" · "), "router", 0, -80, internet)

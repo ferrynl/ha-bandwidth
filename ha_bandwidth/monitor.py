@@ -273,11 +273,14 @@ def collect():
             links = {}
             if openwrt and openwrt.session:
                 try:
-                    links = openwrt.connection_links()
+                    links, bridge_error = openwrt.connection_links()
                 except (OSError, ValueError, http.client.HTTPException) as error:
                     log_health(health, "OpenWrt aansluitingen", str(error))
                 else:
-                    log_health(health, "OpenWrt aansluitingen", success="bridge- en wifi-gegevens verwerkt")
+                    log_health(health, "OpenWrt bridge-tabel", bridge_error, "uitlezing geslaagd")
+                    log_health(health, "OpenWrt aansluitingen",
+                               "" if links else "geen LAN- of wifi-aansluitingen gevonden via dit routeraccount",
+                               f"{len(links)} LAN-, wifi- of mesh-aansluitingen gevonden")
             ROUTER_LINKS = links
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
@@ -298,9 +301,17 @@ def collect():
                 last_day = now.date()
                 log_health(health, "Opslag", success="metingen worden opgeslagen")
                 if modem_configured and not modem_error:
-                    phase = "meting opgeslagen" if any(row[0] == "modem" for row in rows) else "beginstand gelezen, wacht op volgende meting"
+                    modem_delta = next((row for row in rows if row[0] == "modem"), None)
+                    if modem_delta is None:
+                        phase = "beginstand gelezen, wacht op volgende meting"
+                    elif not any(modem_delta[-2:]):
+                        phase = "sensoren uitgelezen, maar tellers zijn sinds de vorige meting niet veranderd"
+                    else:
+                        phase = "verkeer gemeten"
                     if modem_phase != phase:
-                        logging.info("Zyxel: %s", phase)
+                        _, _, entities, _, rx, tx = next(item for item in readings if item[1] == "modem")
+                        logging.info("Zyxel: %s; sensorstanden: %s ontvangen=%s B verzonden=%s B",
+                                     phase, entities, rx, tx)
                     modem_phase = phase
                 else:
                     modem_phase = ""
@@ -313,7 +324,7 @@ def collect():
                 "peers_enabled": SETTINGS.get("track_peers", True),
                 "app_destinations_enabled": track_apps,
                 "router_configured": OPENWRT_ENABLED, "router_error": router_error,
-                "modem_configured": modem_configured, "modem_error": modem_error,
+                "modem_configured": modem_configured, "modem_error": modem_error, "modem_phase": modem_phase,
                 "router_device": openwrt.device if openwrt and not router_error else "",
                 "device_configured": OPENWRT_ENABLED, "device_error": device_error,
                 "host_hints_error": host_hints_error,
