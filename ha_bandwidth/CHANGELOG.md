@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- Zoek en sorteer in alle verkeerstabellen. Klik op een kolomkop om de sorteerrichting te wijzigen.
+- Zoek publieke IP-adressen via IPinfo op voor ASN, netwerkorganisatie en organisatiedomein. Dit werkt met een IPinfo Lite-token en wordt op verzoek uitgevoerd.
+
 ## 0.6.0
 
 - **Apparaten** toont upload en download per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor.

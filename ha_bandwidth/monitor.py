@@ -1,4 +1,5 @@
 import concurrent.futures
+import functools
 import ipaddress
 import http.client
 import json
@@ -15,13 +16,14 @@ from contextlib import closing
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.error import URLError
-from urllib.parse import parse_qs, urlsplit
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import modem_reading
-from openwrt import OpenWrt
+from openwrt import NoRedirect, OpenWrt
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -341,13 +343,48 @@ def report(day, period, kind, source):
                     item["scope"] = "—"
                 else:
                     item["scope"] = "Publiek IP" if address.is_global and not address.is_multicast else "Lokaal / speciaal IP"
+                item["lookup_ip"] = public_ip(item["ip"])
                 destinations.append(item)
     return {
         "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
-        "rows": [dict(row) for row in leaders], "buckets": [dict(row) for row in buckets],
+        "rows": [dict(row, lookup_ip=public_ip(row["source"]) if kind == "peer" else None) for row in leaders],
+        "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
     }
+
+
+def public_ip(value):
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return None
+    if getattr(address, "scope_id", None) or not address.is_global or address.is_multicast or address.is_reserved:
+        return None
+    return str(address)
+
+
+@functools.lru_cache(maxsize=512)
+def ipinfo_lookup(address, day):
+    token = SETTINGS.get("ipinfo_token", "").strip()
+    if not token:
+        raise ValueError("Vul ipinfo_token in bij HA-Bandwidth → Configuratie.")
+    query = urlencode({"token": token})
+    opener = build_opener(ProxyHandler({}), NoRedirect())
+    request = Request(f"https://api.ipinfo.io/lite/{address}?{query}", headers={"Accept": "application/json"})
+    try:
+        with opener.open(request, timeout=5) as response:
+            data = json.loads(response.read(16384))
+    except HTTPError as error:
+        if error.code in (401, 403):
+            raise ValueError("IPinfo accepteert het ingestelde token niet.") from None
+        raise ValueError(f"IPinfo gaf HTTP {error.code}.") from None
+    except (OSError, ValueError, http.client.HTTPException):
+        raise ValueError("IPinfo is tijdelijk niet bereikbaar.") from None
+    if not isinstance(data, dict):
+        raise ValueError("IPinfo gaf een onverwacht antwoord.")
+    return {key: data[key][:250] for key in ("asn", "as_name", "as_domain")
+            if isinstance(data.get(key), str)}
 
 
 class Dashboard(BaseHTTPRequestHandler):
@@ -356,6 +393,18 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         url = urlsplit(self.path)
+        if url.path == "/api/ipinfo":
+            address = public_ip(parse_qs(url.query).get("ip", [""])[0])
+            if not address:
+                self.send_json_error(400, "IPinfo ondersteunt hier alleen publieke IP-adressen.")
+                return
+            try:
+                data = ipinfo_lookup(address, datetime.now(ZONE).date())
+            except ValueError as error:
+                self.send_json_error(400, str(error))
+                return
+            self.reply(json.dumps(data).encode(), "application/json")
+            return
         if url.path == "/api/backup/status":
             self.reply(json.dumps({"previous": PREVIOUS_BACKUP.exists()}).encode(), "application/json")
             return

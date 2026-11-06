@@ -9,6 +9,12 @@ Home Assistant OS-app voor upload, download en de grootste verbruikers per dag, 
 3. Installeer **HA-Bandwidth**. Zet bij de app **Beveiligde modus** uit om Docker-statistieken te lezen. Start de app en open de webinterface. Schakel eventueel **Weergeven in zijbalk** in.
 4. Controleer bovenaan het dashboard of de gemeten interface de gewenste aansluiting is. Zet onder **Configuratie** zo nodig `interface` op de exacte interfacenaam. De standaardtijdzone is `Europe/Amsterdam`.
 
+## Filteren, sorteren en IPinfo
+
+Gebruik de zoekbalk boven een verkeerstabel en klik op een kolomkop om te sorteren. Dit werkt op de weergegeven regels en laat de grafiek en periodetotalen intact.
+
+Vul bij **HA-Bandwidth → Configuratie** je IPinfo Lite-token in bij `ipinfo_token`, sla op en herstart de app. Klik naast een publiek IP-adres op **IPinfo** om het ASN, de netwerkorganisatie en het organisatiedomein op te zoeken. Alleen een aangeklikt publiek adres wordt naar IPinfo gestuurd. Het organisatiedomein komt van IPinfo en kan verschillen van het TLS- of DNS-domein dat in het verkeer is waargenomen. [IPinfo Lite](https://ipinfo.io/developers/lite-api)
+
 ## OpenWrt vergelijken
 
 Vul op het tabblad **Configuratie** van HA-Bandwidth het LAN-adres van je OpenWrt-router in bij `openwrt_url` (bijvoorbeeld `http://192.168.1.1`). Vul de gebruikersnaam en het wachtwoord van de router in bij `openwrt_username` en `openwrt_password`. Laat `openwrt_interface` op `wan` staan als dat de naam van je WAN-interface is. Sla op, herstart de app en open **OpenWrt vergelijken**.

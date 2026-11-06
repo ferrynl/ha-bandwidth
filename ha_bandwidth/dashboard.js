@@ -16,6 +16,131 @@ let source = "";
 let sourceLabel = "";
 let request = 0;
 let focusDestinations = false;
+const tableControls = new Map();
+const ipDetails = new Map();
+const tableCollator = new Intl.Collator("nl-NL", {numeric: true, sensitivity: "base"});
+
+function updateTable(id) {
+  const body = el(id);
+  const table = body.closest("table");
+  let control = tableControls.get(id);
+  if (!control) {
+    const input = document.createElement("input");
+    input.type = "search";
+    input.className = "table-filter";
+    input.placeholder = "Filter deze tabel…";
+    input.setAttribute("aria-label", "Filter " + ({
+      rows: "verkeer", "destination-rows": "bestemmingen", "comparison-rows": "vergelijking",
+    })[id]);
+    table.parentElement.before(input);
+    control = {input, views: new Map(), headings: [...table.querySelectorAll("th")]};
+    tableControls.set(id, control);
+    input.addEventListener("input", () => {
+      control.state.query = input.value;
+      updateTable(id);
+    });
+    control.headings.forEach((heading, column) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sort-header";
+      button.textContent = heading.textContent;
+      heading.replaceChildren(button);
+      button.addEventListener("click", () => {
+        const state = control.state;
+        state.direction = state.column === column ? -state.direction
+          : column >= control.headings.length - 3 ? -1 : 1;
+        state.column = column;
+        updateTable(id);
+      });
+    });
+  }
+  if (!control.views.has(kind)) {
+    control.views.set(kind, {query: "", column: control.headings.length - 1, direction: -1});
+  }
+  const state = control.views.get(kind);
+  control.state = state;
+  if (control.input.value !== state.query) control.input.value = state.query;
+  control.input.hidden = body.rows.length === 0;
+  const tokens = state.query.toLocaleLowerCase("nl-NL").trim().split(/\s+/).filter(Boolean);
+  const rows = [...body.rows];
+  rows.sort((left, right) => {
+    const a = left.cells[state.column];
+    const b = right.cells[state.column];
+    const an = a.dataset.sortNumber;
+    const bn = b.dataset.sortNumber;
+    if (an === undefined && bn !== undefined) return 1;
+    if (an !== undefined && bn === undefined) return -1;
+    const order = an !== undefined ? Number(an) - Number(bn) : tableCollator.compare(a.textContent, b.textContent);
+    return state.direction * order;
+  });
+  for (const row of rows) {
+    const searchable = (row.textContent + " " + (row.dataset.search || "")).toLocaleLowerCase("nl-NL");
+    row.hidden = !tokens.every(token => searchable.includes(token));
+    body.append(row);
+  }
+  control.headings.forEach((heading, column) => {
+    if (column === state.column) heading.setAttribute("aria-sort", state.direction === 1 ? "ascending" : "descending");
+    else heading.removeAttribute("aria-sort");
+  });
+}
+
+function countCells(row, rx, tx, available = true) {
+  for (const value of [rx, tx, rx + tx]) {
+    const cell = row.insertCell();
+    cell.textContent = available ? bytes(value) : "—";
+    if (available) cell.dataset.sortNumber = value;
+  }
+}
+
+function addIpLookup(cell, ip, tableId) {
+  if (!ip) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "IPinfo";
+  button.className = "ip-lookup";
+  button.setAttribute("aria-label", "Zoek netwerk en domein op voor " + ip);
+  const result = document.createElement("span");
+  result.className = "ip-result";
+  result.setAttribute("role", "status");
+  const render = () => {
+    const details = ipDetails.get(ip);
+    button.disabled = details?.pending === true;
+    result.textContent = details?.pending ? "Netwerk opzoeken…"
+      : details?.error || (details && [details.asn, details.as_name, details.as_domain].filter(Boolean).join(" · "))
+        || (details ? "Geen netwerkgegevens gevonden." : "");
+    if (details && !details.pending) {
+      const link = document.createElement("a");
+      link.href = "https://ipinfo.io/" + encodeURIComponent(ip);
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Bekijk op IPinfo";
+      result.append(" ", link);
+    }
+    cell.parentElement.dataset.search = ip + " " + result.textContent;
+  };
+  button.addEventListener("click", async () => {
+    if (!ipDetails.has(ip) || ipDetails.get(ip).error) {
+      ipDetails.set(ip, {pending: true});
+      render();
+      try {
+        const response = await fetch("./api/ipinfo?" + new URLSearchParams({ip}));
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "IPinfo ophalen mislukt.");
+        ipDetails.set(ip, data);
+      } catch (error) {
+        ipDetails.set(ip, {error: error.message});
+      }
+    }
+    for (const refresh of el(tableId).querySelectorAll(".ip-lookup")) {
+      if (refresh.dataset.ip === ip) refresh.refreshIpDetails();
+    }
+    updateTable(tableId);
+  });
+  button.dataset.ip = ip;
+  button.refreshIpDetails = render;
+  cell.append(button, result);
+  render();
+}
 
 function bytes(value) {
   let index = 0;
@@ -100,9 +225,13 @@ function table(rows) {
       focusDestinations = kind === "app";
       load();
     });
-    tr.insertCell().append(button);
-    for (const count of [row.rx, row.tx, row.rx + row.tx]) tr.insertCell().textContent = bytes(count);
+    tr.dataset.search = row.source;
+    const cell = tr.insertCell();
+    cell.append(button);
+    addIpLookup(cell, row.lookup_ip, "rows");
+    countCells(tr, row.rx, row.tx);
   }
+  updateTable("rows");
 }
 
 function showDestinations(data) {
@@ -134,11 +263,18 @@ function showDestinations(data) {
   for (const row of rows) {
     const tr = body.insertRow();
     const domain = row.domain ? row.domain + " (" + row.evidence + ")" : "Onbekend";
-    for (const value of [
-      domain, row.ip || "Overige verbindingen", row.scope, row.protocol || "—",
-      row.port >= 0 ? row.port : "—", bytes(row.rx), bytes(row.tx), bytes(row.rx + row.tx),
-    ]) tr.insertCell().textContent = value;
+    tr.insertCell().textContent = domain;
+    const ipCell = tr.insertCell();
+    ipCell.textContent = row.ip || "Overige verbindingen";
+    addIpLookup(ipCell, row.lookup_ip, "destination-rows");
+    tr.insertCell().textContent = row.scope;
+    tr.insertCell().textContent = row.protocol || "—";
+    const port = tr.insertCell();
+    port.textContent = row.port >= 0 ? row.port : "—";
+    if (row.port >= 0) port.dataset.sortNumber = row.port;
+    countCells(tr, row.rx, row.tx);
   }
+  updateTable("destination-rows");
   if (focusDestinations) {
     focusDestinations = false;
     title.focus();
@@ -155,8 +291,9 @@ function showComparison(data) {
     row.insertCell().textContent = label;
     const rx = values.reduce((total, item) => total + item.rx, 0);
     const tx = values.reduce((total, item) => total + item.tx, 0);
-    for (const count of [rx, tx, rx + tx]) row.insertCell().textContent = values.length ? bytes(count) : "—";
+    countCells(row, rx, tx, values.length > 0);
   }
+  updateTable("comparison-rows");
   const device = data.status.router_device ? "OpenWrt-interface actief: " + data.status.router_device + "." : "";
   el("modem-status").textContent = data.status.router_error || (!data.status.router_configured
     ? "Stel openwrt_url, openwrt_username en openwrt_password in onder HA-Bandwidth → Configuratie."

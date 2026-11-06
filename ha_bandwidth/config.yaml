@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.6.0"
+version: "0.7.0"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -23,6 +23,7 @@ options:
   timezone: Europe/Amsterdam
   track_peers: true
   track_app_destinations: true
+  ipinfo_token: ""
   openwrt_url: ""
   openwrt_username: root
   openwrt_password: ""
@@ -34,6 +35,7 @@ schema:
   timezone: str
   track_peers: bool
   track_app_destinations: bool
+  ipinfo_token: password
   openwrt_url: str
   openwrt_username: str
   openwrt_password: password
