@@ -510,8 +510,12 @@ function showTopology(data) {
   }
 
   if (groups.size) {
-    const internet = add("internet", "Internet", "internet", 0, -105);
-    const router = add("router", "OpenWrt", "router", 0, 0, internet);
+    const modem = data.upstream_modem;
+    const internet = add("internet", "Internet", "internet", 0, modem?.name ? -165 : -105);
+    const upstream = modem?.name
+      ? add("upstream-modem", [modem.name, modem.ip].filter(Boolean).join(" · "), "router", 0, -80, internet)
+      : internet;
+    const router = add("router", "OpenWrt", "router", 0, 0, upstream);
     const branches = [...groups].sort(([a], [b]) => tableCollator.compare(a, b));
     const sector = 2 * Math.PI / branches.length;
     branches.forEach(([name, clients], index) => {

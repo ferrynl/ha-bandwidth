@@ -393,6 +393,10 @@ def report(day, period, kind, source):
         "buckets": [dict(row) for row in buckets],
         "status": STATUS, "first": first, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
+        "upstream_modem": {
+            "name": SETTINGS.get("upstream_modem_name", "").strip(),
+            "ip": SETTINGS.get("upstream_modem_ip", "").strip(),
+        } if kind == "device" else None,
         "topology": router_topology(router_hosts, ROUTER_LINKS, SETTINGS.get("openwrt_url", ""))
                     if kind == "device" else [],
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.5
+
+- Optioneel modem tussen internet en OpenWrt op de netwerkkaart, met instelbare naam en beheer-IP.
+
 ## 0.9.4
 
 - Plaats OpenWrt centraal en verdeel alle apparaten rondom de router. Groepen zijn standaard open.
