@@ -124,7 +124,7 @@ class OpenWrt:
         url = ubus_url(self.settings.get("openwrt_url", ""))
         return self.call(url, self.session, "luci-rpc", "getHostHints", {})
 
-    def wireless_links(self):
+    def wireless_links(self, bridge_ports=None):
         url = ubus_url(self.settings.get("openwrt_url", ""))
 
         def optional(obj, method, params):
@@ -145,13 +145,16 @@ class OpenWrt:
             if isinstance(name, str) and INTERFACE.fullmatch(name):
                 interfaces.setdefault(name, (None, None))
 
-        links = {}
+        bridge_ports = bridge_ports or {}
+        links, direct = {}, {}
         for name, (ssid, band) in interfaces.items():
             params = {"device": name}
             info = optional("iwinfo", "info", params)
-            if info.get("mode") not in (None, "Master", "AP"):
+            mode = info.get("mode")
+            mesh = mode in ("Mesh Point", "Mesh") or bool(re.search(r"-mesh[0-9]+$", name))
+            if not mesh and mode not in (None, "Master", "AP"):
                 continue
-            hostapd = optional(f"hostapd.{name}", "get_clients", {})
+            hostapd = {} if mesh else optional(f"hostapd.{name}", "get_clients", {})
             freq = info.get("frequency") or hostapd.get("freq")
             if isinstance(freq, int):
                 if 2400 <= freq < 2500:
@@ -162,15 +165,21 @@ class OpenWrt:
                     band = "6g"
             label = {"2g": "Wifi 2,4 GHz", "5g": "Wifi 5 GHz", "6g": "Wifi 6 GHz"}.get(band, "Wifi · band onbekend")
             ssid = info.get("ssid") or ssid or ""
-            stations = optional("iwinfo", "assoclist", params).get("results", [])
+            if mesh:
+                label = "Via mesh"
+            details = {"connection": label, "ssid": ssid, "port": name}
+            for mac, port in bridge_ports.items():
+                if port == name:
+                    links[mac] = details
+            stations = [] if mesh else optional("iwinfo", "assoclist", params).get("results", [])
             macs = [station.get("mac", "") for station in stations if isinstance(station, dict)]
             macs.extend(mac for mac, client in hostapd.get("clients", {}).items() if client.get("assoc") is not False)
             for mac in macs:
                 if isinstance(mac, str) and MAC.fullmatch(mac.lower()):
-                    links[mac.lower()] = {"connection": label, "ssid": ssid}
-        return links
+                    direct[mac.lower()] = details
+        return {**links, **direct}
 
-    def lan_links(self):
+    def bridge_ports(self):
         url = ubus_url(self.settings.get("openwrt_url", ""))
         result = self.call(url, self.session, "file", "exec", {
             "command": "/usr/sbin/bridge", "params": ["-j", "fdb", "show"],
@@ -180,13 +189,22 @@ class OpenWrt:
         ports = {}
         for row in json.loads(result.get("stdout", "[]")):
             mac = str(row.get("mac", "")).lower()
-            port = str(row.get("dev", ""))
-            if (MAC.fullmatch(mac) and re.fullmatch(r"lan[0-9]+", port)
+            port = str(row.get("ifname") or row.get("dev") or "")
+            if (MAC.fullmatch(mac) and not (int(mac[:2], 16) & 1) and INTERFACE.fullmatch(port)
                     and row.get("master") and row.get("state") not in ("permanent", "static")
                     and "self" not in row.get("flags", [])):
                 ports.setdefault(mac, set()).add(port)
-        return {mac: {"connection": "Via LAN-poort", "port": next(iter(names))}
-                for mac, names in ports.items() if len(names) == 1}
+        return {mac: next(iter(names)) for mac, names in ports.items() if len(names) == 1}
+
+    def connection_links(self):
+        try:
+            ports = self.bridge_ports()
+        except (OSError, ValueError):
+            ports = {}
+        links = {mac: {"connection": "Via LAN-poort", "port": port}
+                 for mac, port in ports.items() if re.fullmatch(r"lan[0-9]+", port)}
+        links.update(self.wireless_links(ports))
+        return links
 
     def device_readings(self, hints):
         periods = self.nlbw_query("periods").get("periods")

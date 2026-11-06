@@ -272,11 +272,12 @@ def collect():
             ROUTER_HOSTS = hosts_by_ip(hints, SETTINGS.get("openwrt_url", "")) if openwrt else {}
             links = {}
             if openwrt and openwrt.session:
-                for read_links in (openwrt.lan_links, openwrt.wireless_links):
-                    try:
-                        links.update(read_links())
-                    except (OSError, ValueError, http.client.HTTPException):
-                        pass
+                try:
+                    links = openwrt.connection_links()
+                except (OSError, ValueError, http.client.HTTPException) as error:
+                    log_health(health, "OpenWrt aansluitingen", str(error))
+                else:
+                    log_health(health, "OpenWrt aansluitingen", success="bridge- en wifi-gegevens verwerkt")
             ROUTER_LINKS = links
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)

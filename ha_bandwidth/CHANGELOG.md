@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.8
+
+- Herken bridge-poorten met `ifname` of `dev` in de OpenWrt-uitvoer.
+- Gebruik de bridge-tabel ook voor wifi- en mesh-aansluitingen. Rechtstreeks gemelde wifi-associaties hebben voorrang.
+
 ## 0.9.7
 
 - Accepteert Zyxel-sensor-ID’s met of zonder `sensor.` en meldt fouten per configuratieveld.
