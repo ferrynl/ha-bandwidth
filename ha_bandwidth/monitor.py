@@ -3,19 +3,24 @@ import http.client
 import json
 import logging
 import os
+import shutil
 import socket
 import sqlite3
 import subprocess
+import tempfile
 import threading
 import time
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from destinations import AppDestinations, PROTOCOLS, bridge_apps
+from modem import modem_reading
+from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("BANDWIDTH_DATA", "/data"))
@@ -25,11 +30,13 @@ SETTINGS = json.loads(OPTIONS.read_text(encoding="utf-8")) if OPTIONS.exists() e
 ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
 STATUS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
-KINDS = {"host", "app", "peer"}
+KINDS = {"host", "app", "peer", "compare"}
+PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
+BACKUP_LOCK = threading.Lock()
 
 
 def database():
-    connection = sqlite3.connect(DATA / "bandwidth.sqlite3", timeout=10)
+    connection = sqlite3.connect(DATA / "bandwidth.sqlite3", timeout=10, uri=True)
     connection.row_factory = sqlite3.Row
     return connection
 
@@ -267,6 +274,14 @@ def collect():
                 except (OSError, http.client.HTTPException, ValueError) as error:
                     destinations, _ = app_destinations.collect({})
                     errors.append(f"App-bestemmingen: {error}")
+            modem_configured = any(SETTINGS.get(key, "").strip() for key in
+                                   ("modem_download_entity", "modem_upload_entity"))
+            modem_error = ""
+            if modem_configured:
+                try:
+                    readings.append(modem_reading(SETTINGS))
+                except (OSError, URLError, ValueError) as error:
+                    modem_error = str(error)
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -285,6 +300,7 @@ def collect():
                 "shared": shared, "unavailable": unavailable, "zone": ZONE.key,
                 "peers_enabled": SETTINGS.get("track_peers", True),
                 "app_destinations_enabled": track_apps,
+                "modem_configured": modem_configured, "modem_error": modem_error,
             }
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
@@ -304,6 +320,20 @@ def period_bounds(day, period):
 def report(day, period, kind, source):
     start, end = period_bounds(day, period)
     bounds = (start.isoformat(), end.isoformat(), kind)
+    if kind == "compare":
+        with closing(database()) as db:
+            rows = db.execute("""
+                SELECT substr(hour, 1, ?) AS bucket, kind, SUM(rx) AS rx, SUM(tx) AS tx
+                FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ('host', 'modem')
+                GROUP BY bucket, kind ORDER BY bucket
+            """, (PERIODS[period], *bounds[:2])).fetchall()
+            first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
+        return {
+            "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
+            "buckets": [dict(row) for row in rows if row["kind"] == "host"],
+            "modem_buckets": [dict(row) for row in rows if row["kind"] == "modem"],
+            "status": STATUS, "first": first,
+        }
     with closing(database()) as db, db:
         leaders = db.execute("""
             SELECT source, MAX(label) AS label, SUM(rx) AS rx, SUM(tx) AS tx
@@ -347,6 +377,12 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         url = urlsplit(self.path)
+        if url.path == "/api/backup/status":
+            self.reply(json.dumps({"previous": PREVIOUS_BACKUP.exists()}).encode(), "application/json")
+            return
+        if url.path in ("/api/backup", "/api/backup/previous"):
+            self.download_backup(url.path.endswith("/previous"))
+            return
         if url.path == "/api/traffic":
             query = {key: values[0] for key, values in parse_qs(url.query).items()}
             period = query.get("period", "day")
@@ -372,8 +408,100 @@ class Dashboard(BaseHTTPRequestHandler):
         file, content_type = assets[url.path]
         self.reply((ROOT / file).read_bytes(), content_type)
 
-    def reply(self, content, content_type):
-        self.send_response(200)
+    def download_backup(self, previous):
+        with tempfile.TemporaryDirectory(dir=DATA) as directory:
+            target = Path(directory) / "bandwidth.sqlite3"
+            try:
+                if previous:
+                    with BACKUP_LOCK:
+                        if not PREVIOUS_BACKUP.exists():
+                            self.send_error(404, "No previous backup")
+                            return
+                        shutil.copyfile(PREVIOUS_BACKUP, target)
+                else:
+                    with closing(database()) as connection:
+                        snapshot(connection, target)
+            except (OSError, sqlite3.Error):
+                logging.exception("Back-up maken is mislukt")
+                self.send_error(500, "Backup failed")
+                return
+            tag = "voor-herstel" if previous else datetime.now(ZONE).strftime("%Y-%m-%d-%H%M%S")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(target.stat().st_size))
+            self.send_header("Content-Disposition", f'attachment; filename="ha-bandwidth-{tag}.sqlite3"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            with target.open("rb") as source:
+                shutil.copyfileobj(source, self.wfile)
+
+    def do_POST(self):
+        if self.client_address[0] != "172.30.32.2" or self.headers.get("X-HA-Bandwidth-Restore") != "1":
+            self.send_error(403)
+            return
+        if urlsplit(self.path).path != "/api/backup/restore":
+            self.send_error(404)
+            return
+        self.connection.settimeout(30)
+        try:
+            with tempfile.TemporaryDirectory(dir=DATA) as directory:
+                target = Path(directory) / "upload.sqlite3"
+                with target.open("wb") as file:
+                    self.receive_backup(file)
+                with BACKUP_LOCK, closing(database()) as connection:
+                    rescue = Path(directory) / "pre-restore.sqlite3"
+                    restore(connection, target, rescue, PREVIOUS_BACKUP)
+        except (ValueError, sqlite3.DatabaseError) as error:
+            logging.warning("Back-up niet hersteld: %s", error)
+            message = str(error) if isinstance(error, ValueError) else "Dit bestand kon niet worden teruggezet als SQLite-back-up."
+            self.send_json_error(400, message)
+            return
+        except OSError:
+            logging.exception("Back-up terugzetten is mislukt")
+            self.send_json_error(500, "Het terugzetten of opslaan van de herstelkopie is mislukt.")
+            return
+        self.reply(b'{"ok":true}', "application/json")
+
+    def receive_backup(self, file):
+        chunked = self.headers.get("Transfer-Encoding", "").lower() == "chunked"
+        if not chunked and self.headers.get("Content-Length") is None:
+            raise ValueError("Geen back-up ontvangen.")
+        remaining = MAX_BACKUP_SIZE
+
+        def copy(count):
+            nonlocal remaining
+            if count < 0 or count > remaining:
+                raise ValueError("De back-up mag maximaal 256 MiB groot zijn.")
+            remaining -= count
+            while count:
+                data = self.rfile.read(min(count, 65536))
+                if not data:
+                    raise ValueError("De upload is voortijdig afgebroken.")
+                file.write(data)
+                count -= len(data)
+
+        if chunked:
+            while True:
+                header = self.rfile.readline(128)
+                if not header.endswith(b"\r\n"):
+                    raise ValueError("De upload is onvolledig.")
+                count = int(header.split(b";", 1)[0], 16)
+                if count == 0:
+                    break
+                copy(count)
+                if self.rfile.read(2) != b"\r\n":
+                    raise ValueError("De upload is onvolledig.")
+        else:
+            copy(int(self.headers["Content-Length"]))
+        if remaining == MAX_BACKUP_SIZE:
+            raise ValueError("Het back-upbestand is leeg.")
+
+    def send_json_error(self, code, message):
+        self.reply(json.dumps({"error": message}).encode(), "application/json", code)
+
+    def reply(self, content, content_type, code=200):
+        self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")

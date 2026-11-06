@@ -18,7 +18,23 @@
     <button type="button" data-kind="host" aria-pressed="true">Server</button>
     <button type="button" data-kind="app" aria-pressed="false">Apps</button>
     <button type="button" data-kind="peer" aria-pressed="false">IP-adressen</button>
+    <button type="button" data-kind="compare" aria-pressed="false">Modem vergelijken</button>
+    <button type="button" data-kind="backup" aria-pressed="false">Back-up</button>
   </nav>
+  <section class="card" id="backup-panel" hidden>
+    <h2>Back-up van meetgegevens</h2>
+    <p>Download een kopie van alle metingen. Terugzetten vervangt de huidige meetgegevens. De app bewaart vóór het terugzetten automatisch een herstelkopie.</p>
+    <a class="action" href="./api/backup" download>Back-up downloaden</a>
+    <a class="action" id="previous-backup" href="./api/backup/previous" download hidden>Kopie van vóór het terugzetten downloaden</a>
+    <form id="restore-form">
+      <label for="restore-file">SQLite-back-up (max. 256 MiB)</label>
+      <input id="restore-file" type="file" accept=".sqlite3,.sqlite,.db" required>
+      <label><input id="restore-confirm" type="checkbox" required> Ik wil de huidige meetgegevens vervangen.</label>
+      <button id="restore-button" type="submit">Back-up terugzetten</button>
+    </form>
+    <p id="backup-status" role="status"></p>
+  </section>
+  <div id="measurement-panel">
   <p id="explanation"></p>
   <div id="warnings" hidden></div>
   <section class="controls" aria-label="Periode kiezen">
@@ -32,7 +48,17 @@
     <button type="button" id="today">Vandaag</button>
   </section>
   <p id="range"></p>
-  <div class="totals">
+  <div id="comparison" class="card" hidden>
+    <h2>Verkeer per bron</h2>
+    <p id="modem-status" role="status"></p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Bron</th><th scope="col">Download</th><th scope="col">Upload</th><th scope="col">Totaal</th></tr></thead>
+        <tbody id="comparison-rows"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="totals" id="totals">
     <section class="card"><h2>Download</h2><strong id="download">—</strong></section>
     <section class="card"><h2>Upload</h2><strong id="upload">—</strong></section>
     <section class="card"><h2>Totaal</h2><strong id="total">—</strong></section>
@@ -42,7 +68,8 @@
       <h2 id="chart-title">Verkeer over tijd</h2>
       <button type="button" id="clear" hidden>Alle bronnen</button>
     </div>
-    <p class="legend"><span class="rx">● Download</span><span class="tx">● Upload</span></p>
+    <p class="legend" id="legend"><span class="rx">● Download</span><span class="tx">● Upload</span></p>
+    <p class="legend" id="comparison-legend" hidden><span class="rx">● HA-download</span><span class="tx">● HA-upload</span><span class="modem-rx">● Modem-download</span><span class="modem-tx">● Modem-upload</span></p>
     <p id="empty" hidden>Voor deze periode zijn nog geen metingen opgeslagen.</p>
     <div class="plot-shell">
       <div id="axis" aria-hidden="true"></div>
@@ -63,7 +90,7 @@
       </table>
     </div>
   </section>
-  <section class="card table-card">
+  <section class="card table-card" id="ranking-panel">
     <h2 id="ranking">Verkeer per netwerkinterface</h2>
     <p id="ranking-detail">Klik op een regel om de grafiek en totalen op die bron te filteren.</p>
     <div class="table-scroll">
@@ -76,6 +103,7 @@
     <p id="shared"></p>
     <p id="unavailable"></p>
   </section>
+  </div>
 </main>
 </body>
 </html>

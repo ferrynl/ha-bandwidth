@@ -9,6 +9,16 @@ Home Assistant OS-app voor upload, download en de grootste verbruikers per dag, 
 3. Installeer **HA-Bandwidth**. Zet bij de app **Beveiligde modus** uit om Docker-statistieken te lezen. Start de app en open de webinterface. Schakel eventueel **Weergeven in zijbalk** in.
 4. Controleer bovenaan het dashboard of de gemeten interface de gewenste aansluiting is. Zet onder **Configuratie** zo nodig `interface` op de exacte interfacenaam. De standaardtijdzone is `Europe/Amsterdam`.
 
+## Modem of router vergelijken
+
+Vul op het tabblad **Configuratie** van de Home Assistant-app de instellingen `modem_download_entity` en `modem_upload_entity` in. Gebruik twee cumulatieve WAN-datatellers uit Home Assistant (bijvoorbeeld de ontvangen en verzonden bytes van een ondersteunde UPnP/IGD-router). Een snelheidssensor in Mbit/s werkt niet. De app leest de entiteiten via de Home Assistant API. Sla op, start de app opnieuw en open **Modem vergelijken**.
+
+De modem registreert internetverkeer van het hele netwerk. De HA-server registreert ook lokaal netwerkverkeer. De grafiek toont beide bronnen met dezelfde tijdindeling en schaal. Verschillen zijn daarom geen uitsplitsing van internetverkeer door andere apparaten. Modemhistorie begint zodra de twee tellers zijn ingesteld. Bij een tellerreset begint de app met een nieuwe nulmeting.
+
+## Back-up
+
+Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen.
+
 ## Bestemmingen per app
 
 Kies **Apps** en klik op een appnaam. Het detailoverzicht volgt de ingestelde dag, week, maand of het jaar. Per regel zie je het domein, het IP-adres, het IP-protocol (zoals TCP of UDP), de poort van de wederpartij en de gemeten download en upload. De tabel toont maximaal 100 regels, gesorteerd op verbruik.

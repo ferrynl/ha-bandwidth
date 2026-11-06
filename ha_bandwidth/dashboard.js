@@ -3,6 +3,7 @@
 const el = id => document.getElementById(id);
 const format = new Intl.NumberFormat("nl-NL", {maximumFractionDigits: 2});
 const views = {
+  compare: ["De modem meet de WAN-aansluiting van je hele netwerk. De HA-server meet zijn eigen netwerkinterface, inclusief lokaal verkeer. De twee totalen hebben daardoor een verschillende reikwijdte.", ""],
   host: ["Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal.", "Verkeer per netwerkinterface"],
   app: ["Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal.", "Top 30 apps en containers"],
   peer: ["Bron-IP voor downloads en doel-IP voor uploads op de serverinterface. Dit zijn waargenomen IP-bytes.", "Top 30 IP-adressen"],
@@ -27,6 +28,7 @@ function bytes(value) {
 
 function timeline(data) {
   const values = new Map(data.buckets.map(row => [row.bucket, row]));
+  const modem = new Map((data.modem_buckets || []).map(row => [row.bucket, row]));
   const slots = [];
   if (period === "day") {
     for (let hour = 0; hour < 24; hour++) {
@@ -45,7 +47,7 @@ function timeline(data) {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
-  const peak = Math.max(1, ...data.buckets.flatMap(row => [row.rx, row.tx]));
+  const peak = Math.max(1, ...[...values.values(), ...modem.values()].flatMap(row => [row.rx, row.tx]));
   const axis = [1, .75, .5, .25, 0].map(fraction => {
     const label = document.createElement("span");
     label.textContent = bytes(peak * fraction);
@@ -54,22 +56,24 @@ function timeline(data) {
   el("axis").replaceChildren(...axis);
   el("chart").replaceChildren(...slots.map(([key, tick]) => {
     const value = values.get(key);
+    const wan = modem.get(key);
     const group = document.createElement("div");
     group.className = "bucket";
-    group.title = value
-      ? key + " · Download " + bytes(value.rx) + " · Upload " + bytes(value.tx)
-      : key + " · Geen meting";
-    if (value) group.tabIndex = 0;
+    const summary = [];
+    if (value) summary.push((kind === "compare" ? "HA " : "") + "Download " + bytes(value.rx) + " / Upload " + bytes(value.tx));
+    if (wan) summary.push("Modem Download " + bytes(wan.rx) + " / Upload " + bytes(wan.tx));
+    group.title = key + " · " + (summary.join(" · ") || "Geen meting");
+    if (summary.length) group.tabIndex = 0;
     group.setAttribute("aria-label", group.title);
     const columns = document.createElement("div");
     columns.className = "columns";
-    if (value) {
-      for (const [direction, count] of [["rx", value.rx], ["tx", value.tx]]) {
-        const bar = document.createElement("span");
-        bar.className = "bar " + direction;
-        bar.style.height = (100 * count / peak) + "%";
-        columns.append(bar);
-      }
+    const series = [["rx", value?.rx], ["tx", value?.tx]];
+    if (kind === "compare") series.push(["modem-rx", wan?.rx], ["modem-tx", wan?.tx]);
+    for (const [direction, count] of series) {
+      const bar = document.createElement("span");
+      bar.className = "bar " + direction;
+      bar.style.height = (100 * (count ?? 0) / peak) + "%";
+      columns.append(bar);
     }
     const label = document.createElement("span");
     label.className = "tick";
@@ -136,6 +140,21 @@ function showDestinations(data) {
   }
 }
 
+function showComparison(data) {
+  const body = el("comparison-rows");
+  body.replaceChildren();
+  for (const [label, values] of [["HA-server", data.buckets], ["Modem/router WAN", data.modem_buckets]]) {
+    const row = body.insertRow();
+    row.insertCell().textContent = label;
+    const rx = values.reduce((total, item) => total + item.rx, 0);
+    const tx = values.reduce((total, item) => total + item.tx, 0);
+    for (const count of [rx, tx, rx + tx]) row.insertCell().textContent = values.length ? bytes(count) : "—";
+  }
+  el("modem-status").textContent = data.status.modem_error || (!data.status.modem_configured
+    ? "Vul onder de configuratie van HA-Bandwidth modem_download_entity en modem_upload_entity in met twee cumulatieve WAN-tellers uit Home Assistant."
+    : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
+}
+
 function show(data) {
   const status = data.status;
   el("status").textContent = status.updated
@@ -148,9 +167,16 @@ function show(data) {
   el("warnings").hidden = warnings.length === 0;
   el("warnings").textContent = warnings.join(" · ");
   el("range").textContent = data.start === data.end ? data.start : data.start + " t/m " + data.end;
+  const comparing = kind === "compare";
+  el("comparison").hidden = !comparing;
+  el("comparison-legend").hidden = !comparing;
+  el("legend").hidden = comparing;
+  el("totals").hidden = comparing;
+  el("ranking-panel").hidden = comparing;
+  if (comparing) showComparison(data);
   const rx = data.buckets.reduce((total, row) => total + row.rx, 0);
   const tx = data.buckets.reduce((total, row) => total + row.tx, 0);
-  const hasData = data.buckets.length > 0;
+  const hasData = data.buckets.length > 0 || Boolean(data.modem_buckets?.length);
   el("download").textContent = hasData ? bytes(rx) : "—";
   el("upload").textContent = hasData ? bytes(tx) : "—";
   el("total").textContent = hasData ? bytes(rx + tx) : "—";
@@ -159,7 +185,7 @@ function show(data) {
   el("empty").hidden = hasData;
   el("chart").parentElement.hidden = !hasData;
   if (hasData) timeline(data);
-  table(data.rows);
+  if (!comparing) table(data.rows);
   showDestinations(data);
   el("shared-section").hidden = kind !== "app" || !(status.shared?.length || status.unavailable?.length);
   el("shared").textContent = status.shared?.join(", ") || "";
@@ -167,8 +193,56 @@ function show(data) {
     ? "Actief zonder bruikbare tellers: " + status.unavailable.join(", ") : "";
 }
 
+async function backupStatus() {
+  try {
+    const response = await fetch("./api/backup/status");
+    if (!response.ok) return;
+    const data = await response.json();
+    el("previous-backup").hidden = !data.previous;
+  } catch {
+    // Back-up download and restore remain available if this check fails.
+  }
+}
+
+el("restore-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const file = el("restore-file").files[0];
+  if (!file || !el("restore-confirm").checked) return;
+  const status = el("backup-status");
+  if (file.size > 256 * 1024 * 1024) {
+    status.textContent = "Het bestand is groter dan 256 MiB.";
+    return;
+  }
+  const button = el("restore-button");
+  button.disabled = true;
+  status.textContent = "Back-up terugzetten…";
+  try {
+    const response = await fetch("./api/backup/restore", {
+      method: "POST",
+      headers: {"Content-Type": "application/octet-stream", "X-HA-Bandwidth-Restore": "1"},
+      body: file,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+    event.target.reset();
+    status.textContent = "De meetgegevens zijn teruggezet.";
+    await backupStatus();
+  } catch (error) {
+    status.textContent = "Terugzetten mislukt. " + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function load() {
   const id = ++request;
+  const backup = kind === "backup";
+  el("backup-panel").hidden = !backup;
+  el("measurement-panel").hidden = backup;
+  if (backup) {
+    await backupStatus();
+    return;
+  }
   const params = new URLSearchParams({kind, period, source});
   if (el("date").value) params.set("date", el("date").value);
   el("explanation").textContent = views[kind][0];

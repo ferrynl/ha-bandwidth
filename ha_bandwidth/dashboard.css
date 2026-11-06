@@ -21,7 +21,12 @@ button:hover,button[aria-pressed=true]{background:#2b4667;border-color:var(--rx)
 .totals strong{font-size:clamp(.95rem,3.2vw,2.25rem);white-space:nowrap}
 .totals h2{font-size:clamp(.75rem,2vw,1.1rem);color:var(--muted)}
 .rx{color:var(--rx)}.tx{color:var(--tx)}
-.legend{display:flex;gap:1rem}
+.legend{display:flex;gap:1rem;flex-wrap:wrap}
+.modem-rx{color:#74e9ad}.modem-tx{color:#ffca72}
+.bar.modem-rx{background:#74e9ad}.bar.modem-tx{background:#ffca72}
+.action{display:inline-block;color:var(--text);background:#15243a;border:1px solid var(--line);border-radius:9px;padding:.45em .75em;margin:.35em .3em .35em 0}
+#restore-form{display:grid;gap:.65rem;justify-items:start;margin:1rem 0}
+#restore-file{max-width:100%}
 .plot-shell{display:flex;gap:.65rem;overflow:auto}
 #axis{display:flex;flex:0 0 auto;flex-direction:column;justify-content:space-between;height:195px;text-align:right;font-size:.75rem;color:var(--muted)}
 #chart{display:flex;flex:1;gap:4px;align-items:stretch;min-width:min-content}

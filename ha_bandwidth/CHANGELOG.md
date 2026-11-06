@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Nieuwe tab **Back-up** voor het downloaden en terugzetten van de meetdatabase, met een automatische kopie van vóór het terugzetten.
+- Nieuwe tab **Modem vergelijken** met een gezamenlijke grafiek en aparte upload- en downloadtotalen voor de modem en de HA-server.
+- Modemmetingen worden opgehaald via twee instelbare cumulatieve Home Assistant-sensoren.
+
 ## 0.2.0
 
 - Klik op een appnaam om de bestemmingen voor de gekozen dag, week, maand of het jaar te bekijken.
