@@ -3,7 +3,7 @@
 const el = id => document.getElementById(id);
 const format = new Intl.NumberFormat("nl-NL", {maximumFractionDigits: 2});
 const views = {
-  compare: ["De modem meet de WAN-aansluiting van je hele netwerk. De HA-server meet zijn eigen netwerkinterface, inclusief lokaal verkeer. De twee totalen hebben daardoor een verschillende reikwijdte.", ""],
+  compare: ["OpenWrt WAN telt het internetverkeer van alle apparaten die via de router online gaan. De HA-server telt op zijn eigen netwerkinterface ook lokaal verkeer mee.", ""],
   host: ["Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal.", "Verkeer per netwerkinterface"],
   app: ["Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal.", "Top 30 apps en containers"],
   peer: ["Bron-IP voor downloads en doel-IP voor uploads op de serverinterface. Dit zijn waargenomen IP-bytes.", "Top 30 IP-adressen"],
@@ -61,7 +61,7 @@ function timeline(data) {
     group.className = "bucket";
     const summary = [];
     if (value) summary.push((kind === "compare" ? "HA " : "") + "Download " + bytes(value.rx) + " / Upload " + bytes(value.tx));
-    if (wan) summary.push("Modem Download " + bytes(wan.rx) + " / Upload " + bytes(wan.tx));
+    if (wan) summary.push(data.router_label + " download " + bytes(wan.rx) + " / upload " + bytes(wan.tx));
     group.title = key + " · " + (summary.join(" · ") || "Geen meting");
     if (summary.length) group.tabIndex = 0;
     group.setAttribute("aria-label", group.title);
@@ -143,16 +143,19 @@ function showDestinations(data) {
 function showComparison(data) {
   const body = el("comparison-rows");
   body.replaceChildren();
-  for (const [label, values] of [["HA-server", data.buckets], ["Modem/router WAN", data.modem_buckets]]) {
+  el("router-download-legend").textContent = "● " + data.router_label + " download";
+  el("router-upload-legend").textContent = "● " + data.router_label + " upload";
+  for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.modem_buckets]]) {
     const row = body.insertRow();
     row.insertCell().textContent = label;
     const rx = values.reduce((total, item) => total + item.rx, 0);
     const tx = values.reduce((total, item) => total + item.tx, 0);
     for (const count of [rx, tx, rx + tx]) row.insertCell().textContent = values.length ? bytes(count) : "—";
   }
-  el("modem-status").textContent = data.status.modem_error || (!data.status.modem_configured
-    ? "Vul onder de configuratie van HA-Bandwidth modem_download_entity en modem_upload_entity in met twee cumulatieve WAN-tellers uit Home Assistant."
-    : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
+  const device = data.status.router_device ? "OpenWrt-interface actief: " + data.status.router_device + "." : "";
+  el("modem-status").textContent = data.status.router_error || (!data.status.router_configured
+    ? "Stel openwrt_url, openwrt_username en openwrt_password in onder HA-Bandwidth → Configuratie."
+    : data.modem_buckets.length ? device : [device, "Nog geen WAN-metingen voor deze periode."].filter(Boolean).join(" "));
 }
 
 function show(data) {

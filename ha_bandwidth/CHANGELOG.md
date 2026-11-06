@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- HA-Bandwidth leest WAN-upload en -download rechtstreeks uit OpenWrt via ubus.
+- **OpenWrt vergelijken** toont het WAN-verkeer van alle apparaten achter de router naast het verkeer van de HA-server.
+- Bestaande gegevens en back-ups blijven behouden. Oude WAN-metingen via Home Assistant-sensoren worden apart gehouden van de nieuwe OpenWrt-metingen.
+
 ## 0.3.0
 
 - Nieuwe tab **Back-up** voor het downloaden en terugzetten van de meetdatabase, met een automatische kopie van vóór het terugzetten.

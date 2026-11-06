@@ -9,11 +9,15 @@ Home Assistant OS-app voor upload, download en de grootste verbruikers per dag, 
 3. Installeer **HA-Bandwidth**. Zet bij de app **Beveiligde modus** uit om Docker-statistieken te lezen. Start de app en open de webinterface. Schakel eventueel **Weergeven in zijbalk** in.
 4. Controleer bovenaan het dashboard of de gemeten interface de gewenste aansluiting is. Zet onder **Configuratie** zo nodig `interface` op de exacte interfacenaam. De standaardtijdzone is `Europe/Amsterdam`.
 
-## Modem of router vergelijken
+## OpenWrt vergelijken
 
-Vul op het tabblad **Configuratie** van de Home Assistant-app de instellingen `modem_download_entity` en `modem_upload_entity` in. Gebruik twee cumulatieve WAN-datatellers uit Home Assistant (bijvoorbeeld de ontvangen en verzonden bytes van een ondersteunde UPnP/IGD-router). Een snelheidssensor in Mbit/s werkt niet. De app leest de entiteiten via de Home Assistant API. Sla op, start de app opnieuw en open **Modem vergelijken**.
+Vul op het tabblad **Configuratie** van HA-Bandwidth het LAN-adres van je OpenWrt-router in bij `openwrt_url` (bijvoorbeeld `http://192.168.1.1`). Vul de gebruikersnaam en het wachtwoord van de router in bij `openwrt_username` en `openwrt_password`. Laat `openwrt_interface` op `wan` staan als dat de naam van je WAN-interface is. Sla op, herstart de app en open **OpenWrt vergelijken**.
 
-De modem registreert internetverkeer van het hele netwerk. De HA-server registreert ook lokaal netwerkverkeer. De grafiek toont beide bronnen met dezelfde tijdindeling en schaal. Verschillen zijn daarom geen uitsplitsing van internetverkeer door andere apparaten. Modemhistorie begint zodra de twee tellers zijn ingesteld. Bij een tellerreset begint de app met een nieuwe nulmeting.
+De router moet vanuit Home Assistant bereikbaar zijn op de HTTP(S)-interface voor ubus. Op een standaardinstallatie met uhttpd wordt `/ubus` geleverd door `uhttpd-mod-ubus`. De app gebruikt `session.login`, `network.interface.wan status` (met jouw interfacenaam) en `network.device status`. Een rpcd-account met leesrechten voor die twee statusmethoden volstaat. HTTPS vereist een certificaat dat de app vertrouwt. [OpenWrt ubus-documentatie](https://openwrt.org/docs/techref/ubus)
+
+OpenWrt WAN telt verkeer over de gekozen WAN-interface van alle aangesloten apparaten samen. Verkeer tussen lokale apparaten gaat normaal niet via WAN. De HA-server meet zijn eigen interface inclusief lokaal verkeer. De grafiek toont beide bronnen met dezelfde tijdindeling en schaal. De eerste uitlezing legt de beginstand vast. Ook na een tellerreset of wisseling van interface wordt eerst een nieuwe beginstand vastgelegd.
+
+Eerder ingestelde cumulatieve Home Assistant-sensoren blijven bruikbaar als `openwrt_url` leeg is. Die historie wordt apart bewaard van de rechtstreekse OpenWrt-metingen.
 
 ## Back-up
 

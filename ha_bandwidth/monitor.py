@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 from destinations import AppDestinations, PROTOCOLS, bridge_apps
 from modem import modem_reading
+from openwrt import OpenWrt
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -33,6 +34,7 @@ PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 KINDS = {"host", "app", "peer", "compare"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
+OPENWRT_ENABLED = bool(SETTINGS.get("openwrt_url", "").strip())
 
 
 def database():
@@ -243,6 +245,9 @@ def collect():
     previous, capture, last_day = {}, None, None
     app_destinations = AppDestinations()
     track_apps = SETTINGS.get("track_app_destinations", True)
+    openwrt = OpenWrt(SETTINGS) if OPENWRT_ENABLED else None
+    modem_configured = any(SETTINGS.get(key, "").strip() for key in
+                           ("modem_download_entity", "modem_upload_entity"))
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         while True:
             started = time.monotonic()
@@ -274,14 +279,14 @@ def collect():
                 except (OSError, http.client.HTTPException, ValueError) as error:
                     destinations, _ = app_destinations.collect({})
                     errors.append(f"App-bestemmingen: {error}")
-            modem_configured = any(SETTINGS.get(key, "").strip() for key in
-                                   ("modem_download_entity", "modem_upload_entity"))
-            modem_error = ""
-            if modem_configured:
-                try:
+            router_error = ""
+            try:
+                if openwrt:
+                    readings.append(openwrt.reading())
+                elif modem_configured:
                     readings.append(modem_reading(SETTINGS))
-                except (OSError, URLError, ValueError) as error:
-                    modem_error = str(error)
+            except (OSError, URLError, ValueError, http.client.HTTPException) as error:
+                router_error = str(error)
             now = datetime.now(ZONE)
             current, rows = deltas(readings, previous)
             previous = current
@@ -300,7 +305,8 @@ def collect():
                 "shared": shared, "unavailable": unavailable, "zone": ZONE.key,
                 "peers_enabled": SETTINGS.get("track_peers", True),
                 "app_destinations_enabled": track_apps,
-                "modem_configured": modem_configured, "modem_error": modem_error,
+                "router_configured": OPENWRT_ENABLED or modem_configured, "router_error": router_error,
+                "router_device": openwrt.device if openwrt and not router_error else "",
             }
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
@@ -321,17 +327,21 @@ def report(day, period, kind, source):
     start, end = period_bounds(day, period)
     bounds = (start.isoformat(), end.isoformat(), kind)
     if kind == "compare":
+        router_kind = "openwrt" if OPENWRT_ENABLED else "modem"
         with closing(database()) as db:
             rows = db.execute("""
                 SELECT substr(hour, 1, ?) AS bucket, kind, SUM(rx) AS rx, SUM(tx) AS tx
-                FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ('host', 'modem')
+                FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ('host', ?)
                 GROUP BY bucket, kind ORDER BY bucket
-            """, (PERIODS[period], *bounds[:2])).fetchall()
+            """, (PERIODS[period], *bounds[:2], router_kind)).fetchall()
             first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
         return {
             "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
             "buckets": [dict(row) for row in rows if row["kind"] == "host"],
-            "modem_buckets": [dict(row) for row in rows if row["kind"] == "modem"],
+            "modem_buckets": [dict(row) for row in rows if row["kind"] == router_kind],
+            "router_label": "OpenWrt WAN" if OPENWRT_ENABLED or not any(
+                SETTINGS.get(key, "").strip() for key in ("modem_download_entity", "modem_upload_entity")
+            ) else "WAN via HA-sensoren",
             "status": STATUS, "first": first,
         }
     with closing(database()) as db, db:

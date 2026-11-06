@@ -18,7 +18,7 @@
     <button type="button" data-kind="host" aria-pressed="true">Server</button>
     <button type="button" data-kind="app" aria-pressed="false">Apps</button>
     <button type="button" data-kind="peer" aria-pressed="false">IP-adressen</button>
-    <button type="button" data-kind="compare" aria-pressed="false">Modem vergelijken</button>
+    <button type="button" data-kind="compare" aria-pressed="false">OpenWrt vergelijken</button>
     <button type="button" data-kind="backup" aria-pressed="false">Back-up</button>
   </nav>
   <section class="card" id="backup-panel" hidden>
@@ -69,7 +69,7 @@
       <button type="button" id="clear" hidden>Alle bronnen</button>
     </div>
     <p class="legend" id="legend"><span class="rx">● Download</span><span class="tx">● Upload</span></p>
-    <p class="legend" id="comparison-legend" hidden><span class="rx">● HA-download</span><span class="tx">● HA-upload</span><span class="modem-rx">● Modem-download</span><span class="modem-tx">● Modem-upload</span></p>
+    <p class="legend" id="comparison-legend" hidden><span class="rx">● HA-download</span><span class="tx">● HA-upload</span><span class="modem-rx" id="router-download-legend"></span><span class="modem-tx" id="router-upload-legend"></span></p>
     <p id="empty" hidden>Voor deze periode zijn nog geen metingen opgeslagen.</p>
     <div class="plot-shell">
       <div id="axis" aria-hidden="true"></div>
