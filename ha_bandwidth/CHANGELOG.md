@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.11
+
+- Het Home Assistant-dashboard wordt standaard automatisch aangemaakt. Een bestaande dashboardconfiguratie blijft behouden.
+
 ## 0.10.10
 
 - Optie om bij het starten automatisch een bewerkbaar Home Assistant-dashboard met alle HA-Bandwidth-kaarten aan te maken.

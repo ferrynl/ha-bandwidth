@@ -69,7 +69,7 @@ De app gebruikt de Docker-socket uitsluitend voor leesverzoeken. Toegang tot de 
 
 1. Start een MQTT-broker die zich bij Supervisor aanmeldt, bijvoorbeeld de Mosquitto-app, en configureer de MQTT-integratie in Home Assistant. Laat MQTT Discovery aanstaan.
 2. Zet in de HA-Bandwidth-configuratie `publish_to_ha` aan. Via **Instellingen → Apparaten en diensten → MQTT** vind je het apparaat **HA-Bandwidth**. De app publiceert download, upload en totaal voor vandaag, deze week, deze maand en dit jaar. Er zijn sensoren voor de server, OpenWrt WAN, het modem, apps, apparaten en het gezamenlijke IP-verkeer. Met `publish_ip_entities` aan krijg je ook sensoren per gemeten IP-adres. Dit kan veel entiteiten opleveren.
-3. Zet `create_ha_dashboard` aan onder **HA-Bandwidth → Configuratie**, sla op en herstart de app. Het dashboard **HA-Bandwidth** verschijnt in de zijbalk. Een dashboard met dezelfde naam of hetzelfde pad wordt behouden.
+3. HA-Bandwidth maakt bij het starten standaard het dashboard **HA-Bandwidth** aan in de zijbalk. Een dashboard met dezelfde naam of hetzelfde pad wordt behouden. Zet `create_ha_dashboard` uit onder **HA-Bandwidth → Configuratie** als je de automatische aanmaak wilt uitschakelen.
 
 Voor handmatige installatie, open HA-Bandwidth via zijn Home Assistant-zijbalk en klik op **Home Assistant-dashboard downloaden**. Maak een leeg dashboard via **Instellingen → Dashboards**, open de ruwe configuratie-editor en plak de inhoud van het gedownloade YAML-bestand. Je kunt elke kaart daarna verplaatsen, aanpassen of kopiëren naar een ander dashboard. Als je entiteiten eerder hebt hernoemd, pas je hun ID's aan in de kaarten.
 

@@ -788,7 +788,7 @@ if __name__ == "__main__":
     logging.info("HA-Bandwidth %s gestart op poort 63187", version)
     threading.Thread(target=backup_scheduler, daemon=True).start()
     threading.Thread(target=collect, daemon=True).start()
-    if SETTINGS.get("create_ha_dashboard", False):
+    if SETTINGS.get("create_ha_dashboard", True):
         threading.Thread(target=provision_dashboard, daemon=True).start()
     if SETTINGS.get("publish_to_ha", True):
         threading.Thread(
