@@ -5,7 +5,7 @@ Home Assistant OS-app voor upload, download en de grootste verbruikers per dag, 
 ## Installatie via GitHub
 
 1. Open **Instellingen → Apps → App store → ⋮ → Repositories**.
-2. Voeg `https://github.com/ferrynl/ha-bandwidth` toe.
+2. Voeg `https://github.com/ferrynl/ha-apps` toe.
 3. Installeer **HA-Bandwidth**. Zet bij de app **Beveiligde modus** uit om Docker-statistieken te lezen. Start de app en open de webinterface. Schakel eventueel **Weergeven in zijbalk** in.
 4. Controleer bovenaan het dashboard of de gemeten interface de gewenste aansluiting is. Zet onder **Configuratie** zo nodig `interface` op de exacte interfacenaam. De standaardtijdzone is `Europe/Amsterdam`.
 
