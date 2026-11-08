@@ -5,6 +5,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import re
 import shutil
 import socket
 import sqlite3
@@ -41,6 +42,46 @@ PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
 IPINFO_LOCK = threading.Lock()
 OPENWRT_ENABLED = bool(SETTINGS.get("openwrt_url", "").strip())
+
+
+BACKUP_DIR = DATA / "scheduled-backups"
+BACKUP_LIMIT = 25
+BACKUP_NAME = re.compile(r"\d{4}-\d{2}-\d{2}-(daily|weekly)\.sqlite3")
+
+
+def saved_backups():
+    return sorted((path for path in BACKUP_DIR.glob("*.sqlite3")
+                   if BACKUP_NAME.fullmatch(path.name) and path.is_file()), reverse=True)
+
+
+def save_daily_backup(today):
+    with BACKUP_LOCK:
+        BACKUP_DIR.mkdir(exist_ok=True)
+        marker = BACKUP_DIR / "last-date"
+        day = today.isoformat()
+        if not marker.exists() or marker.read_text() != day:
+            kind = "weekly" if today.weekday() == 0 else "daily"
+            target = BACKUP_DIR / f"{day}-{kind}.sqlite3"
+            with tempfile.TemporaryDirectory(dir=BACKUP_DIR) as directory:
+                staging = Path(directory)
+                if not target.exists():
+                    with closing(database()) as connection:
+                        snapshot(connection, staging / "backup.sqlite3")
+                    (staging / "backup.sqlite3").replace(target)
+                (staging / "date").write_text(day)
+                (staging / "date").replace(marker)
+            logging.info("Automatische back-up opgeslagen: %s", target.name)
+        for expired in saved_backups()[BACKUP_LIMIT:]:
+            expired.unlink()
+
+
+def backup_scheduler():
+    while True:
+        try:
+            save_daily_backup(datetime.now(ZONE).date())
+        except (OSError, sqlite3.Error):
+            logging.exception("Automatische back-up of opschoning mislukt")
+        time.sleep(60)
 
 
 def database():
@@ -541,7 +582,13 @@ class Dashboard(BaseHTTPRequestHandler):
             self.reply(json.dumps(data).encode(), "application/json")
             return
         if url.path == "/api/backup/status":
-            self.reply(json.dumps({"previous": PREVIOUS_BACKUP.exists()}).encode(), "application/json")
+            with BACKUP_LOCK:
+                status = {
+                    "previous": PREVIOUS_BACKUP.exists(),
+                    "scheduled": [path.name for path in saved_backups()],
+                    "limit": BACKUP_LIMIT,
+                }
+            self.reply(json.dumps(status).encode(), "application/json")
             return
         if url.path in ("/api/backup", "/api/backup/previous"):
             self.download_backup(url.path.endswith("/previous"))
@@ -610,7 +657,12 @@ class Dashboard(BaseHTTPRequestHandler):
         if self.client_address[0] != "172.30.32.2" or self.headers.get("X-HA-Bandwidth-Restore") != "1":
             self.send_error(403)
             return
-        if urlsplit(self.path).path != "/api/backup/restore":
+        path = urlsplit(self.path).path
+        action = re.fullmatch(r"/api/backup/scheduled/(restore|delete)/([^/]+)", path)
+        if action and BACKUP_NAME.fullmatch(action[2]):
+            self.manage_backup(action[1], action[2])
+            return
+        if path != "/api/backup/restore":
             self.send_error(404)
             return
         self.connection.settimeout(30)
@@ -633,6 +685,24 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_json_error(500, "Het terugzetten of opslaan van de herstelkopie is mislukt.")
             return
         logging.info("Herstel: database teruggezet; eerdere database bewaard als herstelkopie")
+        self.reply(b'{"ok":true}', "application/json")
+
+    def manage_backup(self, action, name):
+        target = BACKUP_DIR / name
+        try:
+            with BACKUP_LOCK:
+                if not target.is_file():
+                    self.send_json_error(404, "Deze back-up is niet meer beschikbaar.")
+                    return
+                if action == "delete":
+                    target.unlink()
+                else:
+                    with tempfile.TemporaryDirectory(dir=DATA) as directory, closing(database()) as connection:
+                        restore(connection, target, Path(directory) / "pre-restore.sqlite3", PREVIOUS_BACKUP)
+        except (ValueError, sqlite3.Error, OSError):
+            logging.exception("Bewerking van automatische back-up mislukt: %s", name)
+            self.send_json_error(500, "De bewerking is mislukt. Bekijk het app-logboek.")
+            return
         self.reply(b'{"ok":true}', "application/json")
 
     def receive_backup(self, file):
@@ -709,6 +779,7 @@ if __name__ == "__main__":
         logging.warning("Kon de vorige appversie niet lezen of bijwerken")
     initialize()
     logging.info("HA-Bandwidth %s gestart op poort 63187", version)
+    threading.Thread(target=backup_scheduler, daemon=True).start()
     threading.Thread(target=collect, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 63187), Dashboard).serve_forever()
 

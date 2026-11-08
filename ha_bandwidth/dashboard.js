@@ -675,12 +675,64 @@ function show(data) {
     ? "Actief zonder bruikbare tellers: " + status.unavailable.join(", ") : "";
 }
 
+const scheduledBackups = document.createElement("section");
+scheduledBackups.setAttribute("aria-label", "Automatische back-ups");
+el("backup-panel").append(scheduledBackups);
+
+function renderScheduledBackups(data) {
+  const title = document.createElement("h3");
+  title.textContent = "Automatische back-ups";
+  const schedule = document.createElement("p");
+  const backups = data.scheduled || [];
+  schedule.textContent = `Dinsdag t/m zondag een dagback-up, maandag een weekback-up. ${backups.length} van ${data.limit} opgeslagen.`;
+  const list = document.createElement("ul");
+  for (const name of backups) {
+    const item = document.createElement("li");
+    const date = name.slice(0, 10).split("-").reverse().join("-");
+    const label = (name.endsWith("-weekly.sqlite3") ? "Weekback-up" : "Dagback-up") + " " + date;
+    item.append(label + " ");
+    for (const [action, caption] of [["restore", "Terugzetten"], ["delete", "Verwijderen"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = caption;
+      button.setAttribute("aria-label", caption + " " + label);
+      button.onclick = async () => {
+        const question = action === "restore"
+          ? "Deze back-up terugzetten? De huidige meetgegevens worden vervangen."
+          : "Deze back-up definitief verwijderen?";
+        if (!window.confirm(label + "\n\n" + question)) return;
+        button.disabled = true;
+        const status = el("backup-status");
+        try {
+          const response = await fetch("./api/backup/scheduled/" + action + "/" + encodeURIComponent(name), {
+            method: "POST",
+            headers: {"X-HA-Bandwidth-Restore": "1"},
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+          if (action === "restore") ipDetails.clear();
+          status.textContent = action === "restore" ? "De meetgegevens zijn teruggezet." : "Back-up verwijderd.";
+          await backupStatus();
+        } catch (error) {
+          status.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+      item.append(button, " ");
+    }
+    list.append(item);
+  }
+  scheduledBackups.replaceChildren(title, schedule, list);
+}
+
 async function backupStatus() {
   try {
     const response = await fetch("./api/backup/status");
     if (!response.ok) return;
     const data = await response.json();
     el("previous-backup").hidden = !data.previous;
+    renderScheduledBackups(data);
   } catch {
     // Back-up download and restore remain available if this check fails.
   }

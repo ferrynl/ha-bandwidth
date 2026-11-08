@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.6
+
+- Automatische dagback-ups van dinsdag tot en met zondag en een weekback-up op maandag. De app bewaart de 25 nieuwste en kan ze terugzetten of verwijderen via Back-up.
+
 ## 0.10.4
 
 - De vergelijkingsgrafiek gebruikt beter onderscheidbare kleuren en per bron een eigen lijnstijl. Lichtere vlakken en lijnen op de voorgrond verbeteren de leesbaarheid bij overlap.
