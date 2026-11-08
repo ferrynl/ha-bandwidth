@@ -2,6 +2,18 @@
   "title": "HA-Bandwidth",
   "views": [
     {
+      "title": "Overzicht",
+      "path": "overzicht",
+      "type": "panel",
+      "cards": [
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/",
+          "hide_background": true
+        }
+      ]
+    },
+    {
       "title": "Server",
       "path": "host",
       "type": "masonry",

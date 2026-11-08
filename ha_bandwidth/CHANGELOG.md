@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.12
+
+- Het Home Assistant-dashboard opent met dezelfde schermvullende HA-Bandwidth-pagina. De bestaande losse kaarten en aangepaste weergaven blijven beschikbaar.
+
 ## 0.10.11
 
 - Het Home Assistant-dashboard wordt standaard automatisch aangemaakt. Een bestaande dashboardconfiguratie blijft behouden.
