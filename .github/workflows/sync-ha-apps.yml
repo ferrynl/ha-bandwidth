@@ -1,0 +1,24 @@
+name: Synchroniseer centrale Home Assistant-appstore
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - ha_bandwidth/config.yaml
+      - .github/workflows/sync-ha-apps.yml
+  workflow_dispatch:
+permissions: {}
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start synchronisatie in ferrynl/ha-apps
+        env:
+          GH_TOKEN: ${{ secrets.HA_APPS_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::Stel het Actions-secret HA_APPS_SYNC_TOKEN in met Actions: Read and write voor ferrynl/ha-apps."
+            exit 1
+          fi
+          gh workflow run sync-apps.yml --repo ferrynl/ha-apps --ref main
