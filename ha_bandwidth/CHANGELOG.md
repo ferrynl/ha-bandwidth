@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.10
+
+- Optie om bij het starten automatisch een bewerkbaar Home Assistant-dashboard met alle HA-Bandwidth-kaarten aan te maken.
+
 ## 0.10.9
 
 - Installatiecheck met stappen voor de MQTT-broker, MQTT-integratie, publicatie en gevonden Home Assistant-entiteiten.

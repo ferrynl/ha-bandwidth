@@ -3,6 +3,7 @@
 const locales = {nl: "nl-NL", en: "en-GB", es: "es-ES", de: "de-DE"};
 const translationColumn = {en: 0, es: 1, de: 2};
 const translations = new Map([
+  ["Dashboard downloaden mislukt.",["Could not download the dashboard.","No se pudo descargar el panel.","Das Dashboard konnte nicht heruntergeladen werden."]],
   ["Home Assistant-installatie controleren",["Check Home Assistant setup","Comprobar la instalación de Home Assistant","Home-Assistant-Einrichtung prüfen"]],
   ["Home Assistant-installatie",["Home Assistant setup","Instalación de Home Assistant","Home-Assistant-Einrichtung"]],
   ["De MQTT-broker ontvangt de meetwaarden. De MQTT-integratie maakt er entiteiten van in Home Assistant.",["The MQTT broker receives measurements. The MQTT integration turns them into Home Assistant entities.","El broker MQTT recibe las mediciones. La integración MQTT las convierte en entidades de Home Assistant.","Der MQTT-Broker empfängt Messwerte. Die MQTT-Integration stellt sie als Entitäten in Home Assistant bereit."]],
@@ -1106,64 +1107,25 @@ if (!embeddedCards.has(embeddedCard)) {
   if (!checked) checkHASetup();
 }
 
-function homeAssistantDashboard() {
-  const ingress = new URL("./", window.location.href);
-  const page = (kind, card, title, aspectRatio) => {
-    const url = new URL(ingress);
-    url.searchParams.set("kind", kind);
-    url.searchParams.set("card", card);
-    return {type: "iframe", url: url.pathname + url.search, title, aspect_ratio: aspectRatio};
-  };
-  const totals = (source, period) => ({
-    type: "entities",
-    title: {day: "Vandaag", week: "Deze week", month: "Deze maand", year: "Dit jaar"}[period],
-    entities: [["rx", "Download"], ["tx", "Upload"], ["total", "Totaal"]].map(([key, name]) => ({
-      entity: "sensor.ha_bandwidth_" + source + "_" + period + "_" + key, name,
-    })),
-  });
-  const view = (title, kind, source, cards) => ({
-    title, path: kind, type: "masonry",
-    cards: [
-      ...["day", "week", "month", "year"].map(period => totals(source, period)),
-      {
-        type: "history-graph", title: "Vandaag · verloop in Home Assistant", hours_to_show: 24,
-        entities: totals(source, "day").entities.slice(0, 2),
-      },
-      page(kind, "history", "Verkeersgrafiek met periodekeuze", "95%"),
-      ...cards,
-    ],
-  });
-  return {title: "HA-Bandwidth", views: [
-    view("Server", "host", "host", [
-      page("host", "ranking", "Netwerkinterfaces", "100%"),
-      page("host", "destinations", "Bronnen en bestemmingen", "125%"),
-    ]),
-    view("Apps", "app", "app", [
-      page("app", "ranking", "Apps en containers", "135%"),
-      page("app", "app-details", "App-details en bestemmingen", "140%"),
-      page("app", "shared", "Gedeeld netwerk", "55%"),
-    ]),
-    view("IP-adressen", "peer", "peer", [page("peer", "ranking", "IP-adressen", "135%")]),
-    view("Apparaten", "device", "device", [
-      page("device", "topology", "Netwerkdiagram", "150%"),
-      page("device", "ranking", "Apparaten", "135%"),
-    ]),
-    view("OpenWrt en modem", "compare", "openwrt", [
-      ...["day", "week", "month", "year"].map(period => ({...totals("modem", period), title: "Modem · " + totals("modem", period).title})),
-      page("compare", "comparison", "Server, OpenWrt en modem", "100%"),
-    ]),
-    {title: "Back-up", path: "backup", type: "masonry", cards: [page("backup", "backup", "Back-upbeheer", "170%")]},
-  ]};
-}
-
-el("download-ha-dashboard").addEventListener("click", event => {
-  event.preventDefault();
-  const blob = new Blob([JSON.stringify(homeAssistantDashboard(), null, 2)], {type: "application/json"});
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "ha-bandwidth-dashboard.yaml";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+el("download-ha-dashboard").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch("./lovelace.json");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const ingress = new URL("./", window.location.href).pathname.replace(/\/$/, "");
+    const content = (await response.text()).replaceAll("__HA_BANDWIDTH_INGRESS__", ingress);
+    const blob = new Blob([content], {type: "application/json"});
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "ha-bandwidth-dashboard.yaml";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch {
+    window.alert(t("Dashboard downloaden mislukt."));
+  } finally {
+    button.disabled = false;
+  }
 });
 
 el("date").addEventListener("change", load);

@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
+from ha_dashboard import provision_dashboard
 from ha_mqtt import publish as publish_to_ha, setup_status
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
@@ -614,6 +615,7 @@ class Dashboard(BaseHTTPRequestHandler):
             return
         assets = {
             "/": ("dashboard.html", "text/html; charset=utf-8"),
+            "/lovelace.json": ("lovelace.json", "application/json"),
             "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
             "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
         }
@@ -786,6 +788,8 @@ if __name__ == "__main__":
     logging.info("HA-Bandwidth %s gestart op poort 63187", version)
     threading.Thread(target=backup_scheduler, daemon=True).start()
     threading.Thread(target=collect, daemon=True).start()
+    if SETTINGS.get("create_ha_dashboard", False):
+        threading.Thread(target=provision_dashboard, daemon=True).start()
     if SETTINGS.get("publish_to_ha", True):
         threading.Thread(
             target=publish_to_ha,

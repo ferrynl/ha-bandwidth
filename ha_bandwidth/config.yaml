@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.10.9"
+version: "0.10.10"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -21,6 +21,7 @@ ingress_port: 63187
 panel_admin: true
 panel_icon: mdi:chart-timeline-variant
 options:
+  create_ha_dashboard: false
   publish_to_ha: true
   publish_ip_entities: false
   interface: auto
@@ -41,6 +42,7 @@ options:
   modem_download_entity: ""
   modem_upload_entity: ""
 schema:
+  create_ha_dashboard: bool
   publish_to_ha: bool
   publish_ip_entities: bool
   interface: str
