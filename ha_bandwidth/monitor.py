@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
+from ha_mqtt import publish as publish_to_ha
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -781,5 +782,11 @@ if __name__ == "__main__":
     logging.info("HA-Bandwidth %s gestart op poort 63187", version)
     threading.Thread(target=backup_scheduler, daemon=True).start()
     threading.Thread(target=collect, daemon=True).start()
+    if SETTINGS.get("publish_to_ha", True):
+        threading.Thread(
+            target=publish_to_ha,
+            args=(database, ZONE, period_bounds, SETTINGS.get("publish_ip_entities", False), DATA / "mqtt-sensors.json"),
+            daemon=True,
+        ).start()
     ThreadingHTTPServer(("0.0.0.0", 63187), Dashboard).serve_forever()
 

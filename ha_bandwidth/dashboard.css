@@ -91,3 +91,17 @@ nav + p{margin-top:.6rem}
 
 
 .cellular-rx{color:#ff8175}.cellular-tx{color:#edf4ff}
+
+/* The same views can be used as separate Home Assistant cards. */
+.ha-dashboard-export{margin:.3rem 0 .8rem}
+body[data-dashboard-card] main{max-width:none;padding:.5rem}
+body[data-dashboard-card] header,
+body[data-dashboard-card] main > nav,
+body[data-dashboard-card] #explanation,
+body[data-dashboard-card] #totals,
+body[data-dashboard-card]:not([data-dashboard-card="history"]) .history,
+body[data-dashboard-card]:not([data-dashboard-card="ranking"]):not([data-dashboard-card="app-details"]) #ranking-panel,
+body[data-dashboard-card]:not([data-dashboard-card="destinations"]):not([data-dashboard-card="app-details"]) #destinations,
+body[data-dashboard-card]:not([data-dashboard-card="topology"]) #topology-panel,
+body[data-dashboard-card]:not([data-dashboard-card="comparison"]) #comparison,
+body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{display:none}

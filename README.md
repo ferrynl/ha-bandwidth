@@ -64,3 +64,11 @@ De bestemmingshistorie begint met versie 0.2.0. Bestaande verkeerstotalen blijve
 - Het dagoverzicht is per uur, week en maand per dag, en jaar per maand. De app bewaart 400 lokale kalenderdagen in SQLite in de eigen `/data`-map. Gebruik een Home Assistant-back-up van de app om historie te behouden.
 
 De app gebruikt de Docker-socket uitsluitend voor leesverzoeken. Toegang tot de Docker-socket is een ruime hostmachtiging, ook met een alleen-lezen mount. Ingress biedt toegang via Home Assistant. De HTTP-server weigert verbindingen vanaf andere bronadressen dan de Supervisor-ingressproxy.
+
+## Verkeerssensoren en dashboard in Home Assistant
+
+1. Start een MQTT-broker die zich bij Supervisor aanmeldt, bijvoorbeeld de Mosquitto-app, en configureer de MQTT-integratie in Home Assistant. Laat MQTT Discovery aanstaan.
+2. Zet in de HA-Bandwidth-configuratie `publish_to_ha` aan. Via **Instellingen → Apparaten en diensten → MQTT** vind je het apparaat **HA-Bandwidth**. De app publiceert download, upload en totaal voor vandaag, deze week, deze maand en dit jaar. Er zijn sensoren voor de server, OpenWrt WAN, het modem, apps, apparaten en het gezamenlijke IP-verkeer. Met `publish_ip_entities` aan krijg je ook sensoren per gemeten IP-adres. Dit kan veel entiteiten opleveren.
+3. Open HA-Bandwidth via zijn Home Assistant-zijbalk en klik op **Home Assistant-dashboard downloaden**. Maak een leeg dashboard via **Instellingen → Dashboards**, open de ruwe configuratie-editor en plak de inhoud van het gedownloade YAML-bestand. Je kunt elke kaart daarna verplaatsen, aanpassen of kopiëren naar een ander dashboard. Als je entiteiten eerder hebt hernoemd, pas je hun ID's aan in de kaarten.
+
+De totalen gebruiken gewone Home Assistant-entiteitskaarten. Grafieken, tabellen, de netwerkkaart en back-upbeheer zijn aparte webpagina-kaarten die de interactieve onderdelen van HA-Bandwidth via Ingress laden. Voor deze kaarten heb je toegang tot de app nodig. Open de app vanuit de zijbalk als je Ingress-sessie verlopen is. Bewaar het dashboard binnen je eigen Home Assistant-installatie.

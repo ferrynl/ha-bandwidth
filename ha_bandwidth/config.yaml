@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.10.7"
+version: "0.10.8"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -11,6 +11,8 @@ init: false
 host_network: true
 docker_api: true
 homeassistant_api: true
+services:
+  - mqtt:want
 privileged:
   - NET_RAW
 ingress: true
@@ -19,6 +21,8 @@ ingress_port: 63187
 panel_admin: true
 panel_icon: mdi:chart-timeline-variant
 options:
+  publish_to_ha: true
+  publish_ip_entities: false
   interface: auto
   timezone: Europe/Amsterdam
   track_peers: true
@@ -37,6 +41,8 @@ options:
   modem_download_entity: ""
   modem_upload_entity: ""
 schema:
+  publish_to_ha: bool
+  publish_ip_entities: bool
   interface: str
   timezone: str
   track_peers: bool

@@ -3,6 +3,7 @@
 const locales = {nl: "nl-NL", en: "en-GB", es: "es-ES", de: "de-DE"};
 const translationColumn = {en: 0, es: 1, de: 2};
 const translations = new Map([
+  ["Home Assistant-dashboard downloaden",["Download Home Assistant dashboard","Descargar panel de Home Assistant","Home Assistant-Dashboard herunterladen"]],
   ["Publiek IP",["Public IP","IP pública","Öffentliche IP"]],
   ["Lokaal / speciaal IP",["Local / special-use IP","IP local / de uso especial","Lokale IP / IP für besondere Zwecke"]],
   ["5G-modem via HA",["5G modem via HA","Módem 5G mediante HA","5G-Modem über HA"]],
@@ -199,7 +200,11 @@ const views = {
 const monthFormat = new Intl.DateTimeFormat(locale, {month: "short", timeZone: "UTC"});
 const dateFormat = new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeZone: "UTC"});
 const months = Array.from({length: 12}, (_, index) => monthFormat.format(Date.UTC(2020, index, 1)));
-let kind = "host";
+const embeddedCards = new Set(["history", "ranking", "destinations", "app-details", "shared", "topology", "comparison", "backup"]);
+const embeddedCard = pageUrl.searchParams.get("card");
+const embeddedKind = pageUrl.searchParams.get("kind");
+if (embeddedCards.has(embeddedCard)) document.body.dataset.dashboardCard = embeddedCard;
+let kind = Object.hasOwn(views, embeddedKind) || embeddedKind === "backup" ? embeddedKind : "host";
 let period = "day";
 let source = "";
 let sourceLabel = "";
@@ -998,6 +1003,66 @@ for (const [key, change] of [
     });
   }
 }
+function homeAssistantDashboard() {
+  const ingress = new URL("./", window.location.href);
+  const page = (kind, card, title, aspectRatio) => {
+    const url = new URL(ingress);
+    url.searchParams.set("kind", kind);
+    url.searchParams.set("card", card);
+    return {type: "iframe", url: url.pathname + url.search, title, aspect_ratio: aspectRatio};
+  };
+  const totals = (source, period) => ({
+    type: "entities",
+    title: {day: "Vandaag", week: "Deze week", month: "Deze maand", year: "Dit jaar"}[period],
+    entities: [["rx", "Download"], ["tx", "Upload"], ["total", "Totaal"]].map(([key, name]) => ({
+      entity: "sensor.ha_bandwidth_" + source + "_" + period + "_" + key, name,
+    })),
+  });
+  const view = (title, kind, source, cards) => ({
+    title, path: kind, type: "masonry",
+    cards: [
+      ...["day", "week", "month", "year"].map(period => totals(source, period)),
+      {
+        type: "history-graph", title: "Vandaag · verloop in Home Assistant", hours_to_show: 24,
+        entities: totals(source, "day").entities.slice(0, 2),
+      },
+      page(kind, "history", "Verkeersgrafiek met periodekeuze", "95%"),
+      ...cards,
+    ],
+  });
+  return {title: "HA-Bandwidth", views: [
+    view("Server", "host", "host", [
+      page("host", "ranking", "Netwerkinterfaces", "100%"),
+      page("host", "destinations", "Bronnen en bestemmingen", "125%"),
+    ]),
+    view("Apps", "app", "app", [
+      page("app", "ranking", "Apps en containers", "135%"),
+      page("app", "app-details", "App-details en bestemmingen", "140%"),
+      page("app", "shared", "Gedeeld netwerk", "55%"),
+    ]),
+    view("IP-adressen", "peer", "peer", [page("peer", "ranking", "IP-adressen", "135%")]),
+    view("Apparaten", "device", "device", [
+      page("device", "topology", "Netwerkdiagram", "150%"),
+      page("device", "ranking", "Apparaten", "135%"),
+    ]),
+    view("OpenWrt en modem", "compare", "openwrt", [
+      ...["day", "week", "month", "year"].map(period => ({...totals("modem", period), title: "Modem · " + totals("modem", period).title})),
+      page("compare", "comparison", "Server, OpenWrt en modem", "100%"),
+    ]),
+    {title: "Back-up", path: "backup", type: "masonry", cards: [page("backup", "backup", "Back-upbeheer", "170%")]},
+  ]};
+}
+
+el("download-ha-dashboard").addEventListener("click", event => {
+  event.preventDefault();
+  const blob = new Blob([JSON.stringify(homeAssistantDashboard(), null, 2)], {type: "application/json"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "ha-bandwidth-dashboard.yaml";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+
 el("date").addEventListener("change", load);
 el("today").addEventListener("click", () => { el("date").value = ""; load(); });
 el("clear").addEventListener("click", () => { source = ""; sourceLabel = ""; load(); });

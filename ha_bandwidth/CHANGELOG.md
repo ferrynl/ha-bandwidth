@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.8
+
+- Home Assistant ontdekt verkeerssensoren voor server, WAN, modem, apps en apparaten via MQTT.
+- Exporteer een dashboard met bewerkbare Home Assistant-entiteitskaarten en losse kaarten voor de bestaande grafieken, tabellen, netwerkkaart en back-upbeheer.
+
 ## 0.10.7
 
 - Dashboard in het Nederlands, Engels, Spaans en Duits. De taalkeuze rechtsboven wordt per browser bewaard.
