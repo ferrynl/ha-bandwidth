@@ -1,15 +1,204 @@
 "use strict";
 
+const locales = {nl: "nl-NL", en: "en-GB", es: "es-ES", de: "de-DE"};
+const translationColumn = {en: 0, es: 1, de: 2};
+const translations = new Map([
+  ["Publiek IP",["Public IP","IP pública","Öffentliche IP"]],
+  ["Lokaal / speciaal IP",["Local / special-use IP","IP local / de uso especial","Lokale IP / IP für besondere Zwecke"]],
+  ["5G-modem via HA",["5G modem via HA","Módem 5G mediante HA","5G-Modem über HA"]],
+  ["HA-server",["HA server","Servidor HA","HA-Server"]],
+  ["beginstand gelezen, wacht op volgende meting",["initial reading recorded, waiting for the next measurement","lectura inicial registrada, esperando la siguiente medición","Ausgangswert erfasst, nächste Messung steht aus"]],
+  ["tellers uitgelezen, maar deze zijn sinds de vorige meting niet veranderd",["counters read, unchanged since the previous measurement","contadores leídos, sin cambios desde la medición anterior","Zähler ausgelesen, seit der letzten Messung unverändert"]],
+  ["verkeer gemeten",["traffic measured","tráfico medido","Datenverkehr gemessen"]],
+  ["Taal",["Language","Idioma","Sprache"]],
+  ["HOME ASSISTANT · NETWERK",["HOME ASSISTANT · NETWORK","HOME ASSISTANT · RED","HOME ASSISTANT · NETZWERK"]],
+  ["Metingen ophalen…",["Loading measurements…","Cargando mediciones…","Messwerte werden geladen…"]],
+  ["Meetbron",["Measurement source","Fuente de medición","Messquelle"]],
+  ["Server",["Server","Servidor","Server"]],
+  ["Apps",["Apps","Aplicaciones","Apps"]],
+  ["IP-adressen",["IP addresses","Direcciones IP","IP-Adressen"]],
+  ["Apparaten",["Devices","Dispositivos","Geräte"]],
+  ["OpenWrt vergelijken",["Compare OpenWrt","Comparar OpenWrt","OpenWrt vergleichen"]],
+  ["Back-up",["Backup","Copia de seguridad","Sicherung"]],
+  ["Back-up van meetgegevens",["Measurement backup","Copia de seguridad de mediciones","Sicherung der Messdaten"]],
+  ["Download een kopie van alle metingen. Terugzetten vervangt de huidige meetgegevens. De app bewaart vóór het terugzetten automatisch een herstelkopie.",["Download a copy of all measurements. Restoring replaces the current measurements. The app automatically saves a recovery copy before restoring.","Descarga una copia de todas las mediciones. Al restaurar se sustituyen las mediciones actuales. La aplicación guarda automáticamente una copia de recuperación antes de restaurar.","Lade eine Kopie aller Messwerte herunter. Beim Wiederherstellen werden die aktuellen Messdaten ersetzt. Die App speichert vorher automatisch eine Wiederherstellungskopie."]],
+  ["Back-up downloaden",["Download backup","Descargar copia de seguridad","Sicherung herunterladen"]],
+  ["Kopie van vóór het terugzetten downloaden",["Download pre-restore copy","Descargar copia previa a la restauración","Kopie vor der Wiederherstellung herunterladen"]],
+  ["SQLite-back-up (max. 256 MiB)",["SQLite backup (max. 256 MiB)","Copia SQLite (máx. 256 MiB)","SQLite-Sicherung (max. 256 MiB)"]],
+  ["Ik wil de huidige meetgegevens vervangen.",["I want to replace the current measurements.","Quiero sustituir las mediciones actuales.","Ich möchte die aktuellen Messdaten ersetzen."]],
+  ["Back-up terugzetten",["Restore backup","Restaurar copia de seguridad","Sicherung wiederherstellen"]],
+  ["Periode kiezen",["Choose a period","Elegir período","Zeitraum wählen"]],
+  ["Periode",["Period","Período","Zeitraum"]],
+  ["Dag",["Day","Día","Tag"]],
+  ["Week",["Week","Semana","Woche"]],
+  ["Maand",["Month","Mes","Monat"]],
+  ["Jaar",["Year","Año","Jahr"]],
+  ["Datum",["Date","Fecha","Datum"]],
+  ["Vandaag",["Today","Hoy","Heute"]],
+  ["Verkeer per bron",["Traffic by source","Tráfico por fuente","Datenverkehr nach Quelle"]],
+  ["Bron",["Source","Fuente","Quelle"]],
+  ["Download",["Download","Descarga","Download"]],
+  ["Upload",["Upload","Subida","Upload"]],
+  ["Totaal",["Total","Total","Gesamt"]],
+  ["Bestemmingen",["Destinations","Destinos","Ziele"]],
+  ["Domein / apparaat",["Domain / device","Dominio / dispositivo","Domain / Gerät"]],
+  ["IP-adres",["IP address","Dirección IP","IP-Adresse"]],
+  ["Type adres",["Address type","Tipo de dirección","Adresstyp"]],
+  ["Protocol",["Protocol","Protocolo","Protokoll"]],
+  ["Poort wederpartij",["Remote port","Puerto remoto","Gegenstellenport"]],
+  ["Netwerkdiagram",["Network diagram","Diagrama de red","Netzwerkdiagramm"]],
+  ["Zoek op naam, IP of MAC…",["Search by name, IP or MAC…","Buscar por nombre, IP o MAC…","Nach Name, IP oder MAC suchen…"]],
+  ["Zoek in de apparatenwolk",["Search network devices","Buscar dispositivos de red","Netzwerkgeräte suchen"]],
+  ["Zoomen op de netwerkkaart",["Zoom the network map","Ampliar o reducir el mapa de red","Netzwerkkarte zoomen"]],
+  ["Uitzoomen",["Zoom out","Alejar","Verkleinern"]],
+  ["Inzoomen",["Zoom in","Acercar","Vergrößern"]],
+  ["Alles in beeld",["Fit all","Mostrar todo","Alles anzeigen"]],
+  ["Interactieve netwerkkaart",["Interactive network map","Mapa de red interactivo","Interaktive Netzwerkkarte"]],
+  ["Geen apparaten gevonden.",["No devices found.","No se encontraron dispositivos.","Keine Geräte gefunden."]],
+  ["Toon verkeersgrafiek",["Show traffic chart","Mostrar gráfico de tráfico","Datenverkehrsdiagramm anzeigen"]],
+  ["Verkeer over tijd",["Traffic over time","Tráfico a lo largo del tiempo","Datenverkehr im Zeitverlauf"]],
+  ["Alle bronnen",["All sources","Todas las fuentes","Alle Quellen"]],
+  ["● Download",["● Download","● Descarga","● Download"]],
+  ["● Upload",["● Upload","● Subida","● Upload"]],
+  ["HA-download",["HA download","Descarga de HA","HA-Download"]],
+  ["HA-upload",["HA upload","Subida de HA","HA-Upload"]],
+  ["Voor deze periode zijn nog geen metingen opgeslagen.",["No measurements have been saved for this period.","No hay mediciones guardadas para este período.","Für diesen Zeitraum wurden keine Messwerte gespeichert."]],
+  ["Download boven de nullijn en upload eronder",["Download above zero and upload below","Descargas por encima de cero y subidas por debajo","Download oberhalb der Nulllinie, Upload darunter"]],
+  ["Verkeer per netwerkinterface",["Traffic by network interface","Tráfico por interfaz de red","Datenverkehr nach Netzwerkschnittstelle"]],
+  ["Klik op een regel om de grafiek en totalen op die bron te filteren.",["Select a row to filter the chart and totals by source.","Selecciona una fila para filtrar el gráfico y los totales por fuente.","Wähle eine Zeile aus, um Diagramm und Summen nach Quelle zu filtern."]],
+  ["Containers met een gedeeld netwerk",["Containers sharing a network","Contenedores con red compartida","Container mit gemeinsamem Netzwerk"]],
+  ["Internetverkeer per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor. Klik op een apparaat om alleen het verkeer daarvan te bekijken.",["Internet traffic per wireless or wired device via OpenWrt Bandwidth Monitor. Select a device to see its traffic.","Tráfico de Internet por dispositivo Wi-Fi o cableado mediante OpenWrt Bandwidth Monitor. Selecciona un dispositivo para ver su tráfico.","Internetverkehr pro WLAN- oder kabelgebundenem Gerät über OpenWrt Bandwidth Monitor. Wähle ein Gerät aus, um dessen Datenverkehr zu sehen."]],
+  ["Verkeer per apparaat",["Traffic by device","Tráfico por dispositivo","Datenverkehr nach Gerät"]],
+  ["OpenWrt WAN telt het internetverkeer van alle apparaten die via de router online gaan. De HA-server telt op zijn eigen netwerkinterface ook lokaal verkeer mee.",["OpenWrt WAN counts internet traffic for devices that connect through the router. The HA server also counts local traffic on its own network interface.","La WAN de OpenWrt cuenta el tráfico de Internet de los dispositivos conectados a través del router. El servidor HA también cuenta el tráfico local de su propia interfaz de red.","OpenWrt WAN zählt den Internetverkehr der Geräte, die über den Router online sind. Der HA-Server zählt auf seiner eigenen Netzwerkschnittstelle auch lokalen Datenverkehr."]],
+  ["Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal.",["Server network interface. The total includes local and internet traffic.","Interfaz de red del servidor. El total incluye tráfico local y de Internet.","Netzwerkschnittstelle des Servers. Die Summe umfasst lokalen Datenverkehr und Internetverkehr."]],
+  ["Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal.",["Traffic from containers with their own counters. This can include internal Docker traffic and partially overlaps with the server total.","Tráfico de contenedores con contadores propios. Puede incluir tráfico interno de Docker y coincidir en parte con el total del servidor.","Datenverkehr von Containern mit eigenen Zählern. Dieser kann internen Docker-Verkehr enthalten und sich teilweise mit der Serversumme überschneiden."]],
+  ["Top 30 apps en containers",["Top 30 apps and containers","30 aplicaciones y contenedores principales","Top 30 Apps und Container"]],
+  ["Bron-IP voor downloads en doel-IP voor uploads op de serverinterface. Dit zijn waargenomen IP-bytes.",["Source IP for downloads and destination IP for uploads on the server interface. These are observed IP bytes.","IP de origen para descargas e IP de destino para subidas en la interfaz del servidor. Son bytes IP observados.","Quell-IP für Downloads und Ziel-IP für Uploads an der Serverschnittstelle. Angezeigt werden beobachtete IP-Bytes."]],
+  ["Top 30 IP-adressen",["Top 30 IP addresses","30 direcciones IP principales","Top 30 IP-Adressen"]],
+  ["Filter deze tabel…",["Filter this table…","Filtrar esta tabla…","Diese Tabelle filtern…"]],
+  ["Filter ",["Filter ","Filtrar ","Filtern: "]],
+  ["verkeer",["traffic","tráfico","Datenverkehr"]],
+  ["bestemmingen",["destinations","destinos","Ziele"]],
+  ["vergelijking",["comparison","comparación","Vergleich"]],
+  ["Apparaat zonder naam",["Unnamed device","Dispositivo sin nombre","Unbenanntes Gerät"]],
+  ["Huidige apparaatkoppeling uit OpenWrt",["Current device association from OpenWrt","Asociación actual del dispositivo en OpenWrt","Aktuelle Gerätezuordnung aus OpenWrt"]],
+  ["Zoek netwerk en domein op voor ",["Look up network and domain for ","Consultar red y dominio de ","Netzwerk und Domain nachschlagen für "]],
+  ["Netwerk opzoeken…",["Looking up network…","Buscando red…","Netzwerk wird gesucht…"]],
+  ["Geen netwerkgegevens gevonden.",["No network information found.","No se encontraron datos de red.","Keine Netzwerkdaten gefunden."]],
+  ["Bekijk op IPinfo",["View on IPinfo","Ver en IPinfo","Auf IPinfo anzeigen"]],
+  ["IPinfo ophalen mislukt.",["Could not load IPinfo.","No se pudo consultar IPinfo.","IPinfo konnte nicht geladen werden."]],
+  ["Wijs een tijdvak aan voor de waarden.",["Point to a time slot to see its values.","Señala un intervalo para ver sus valores.","Zeige auf einen Zeitabschnitt, um die Werte zu sehen."]],
+  ["Geen meting",["No measurement","Sin medición","Kein Messwert"]],
+  ["Grootste bronnen en bestemmingen van de server",["Top server sources and destinations","Principales fuentes y destinos del servidor","Größte Quellen und Ziele des Servers"]],
+  ["Bestemmingen · ",["Destinations · ","Destinos · ","Ziele · "]],
+  ["Waargenomen IP-verkeer. TLS geeft een zichtbare domeinnaam aan. DNS is een aanwijzing.",["Observed IP traffic. TLS identifies a visible domain name. DNS indicates a possible match.","Tráfico IP observado. TLS identifica un dominio visible. DNS indica una posible coincidencia.","Beobachteter IP-Verkehr. TLS identifiziert einen sichtbaren Domainnamen. DNS weist auf eine mögliche Zuordnung hin."]],
+  ["De bestemmingsmeting staat uit.",["Destination monitoring is disabled.","La medición de destinos está desactivada.","Die Zielmessung ist deaktiviert."]],
+  ["Nog geen bronnen of bestemmingen gemeten voor deze periode. De serverdetails beginnen bij versie 0.5.0.",["No sources or destinations measured for this period. Server details are available starting with version 0.5.0.","No se han medido fuentes ni destinos para este período. Los detalles del servidor están disponibles desde la versión 0.5.0.","Für diesen Zeitraum wurden keine Quellen oder Ziele gemessen. Serverdetails sind ab Version 0.5.0 verfügbar."]],
+  ["Geen bestemmingen gemeten voor deze app en periode.",["No destinations measured for this app and period.","No se han medido destinos para esta aplicación y este período.","Für diese App und diesen Zeitraum wurden keine Ziele gemessen."]],
+  [" Bij download zie je het bron-IP. Bij upload zie je het doel-IP.",[" Downloads show the source IP. Uploads show the destination IP."," Las descargas muestran la IP de origen. Las subidas muestran la IP de destino."," Downloads zeigen die Quell-IP. Uploads zeigen die Ziel-IP."]],
+  [" Apparaatnamen en MAC-adressen komen uit de huidige OpenWrt-lijst.",[" Device names and MAC addresses come from the current OpenWrt list."," Los nombres y las direcciones MAC provienen de la lista actual de OpenWrt."," Gerätenamen und MAC-Adressen stammen aus der aktuellen OpenWrt-Liste."]],
+  [" De tabel toont de 100 grootste regels.",[" The table shows the 100 largest entries."," La tabla muestra las 100 entradas con más tráfico."," Die Tabelle zeigt die 100 größten Einträge."]],
+  ["Overige verbindingen",["Other connections","Otras conexiones","Weitere Verbindungen"]],
+  ["OpenWrt-interface actief: ",["OpenWrt interface active: ","Interfaz OpenWrt activa: ","OpenWrt-Schnittstelle aktiv: "]],
+  ["OpenWrt is niet ingesteld.",["OpenWrt is not configured.","OpenWrt no está configurado.","OpenWrt ist nicht eingerichtet."]],
+  ["Vul modem_download_entity en modem_upload_entity in bij Configuratie.",["Enter modem_download_entity and modem_upload_entity under Configuration.","Introduce modem_download_entity y modem_upload_entity en Configuración.","Trage modem_download_entity und modem_upload_entity unter Konfiguration ein."]],
+  ["Nog geen modemmetingen voor deze periode.",["No modem measurements for this period yet.","Todavía no hay mediciones del módem para este período.","Für diesen Zeitraum liegen noch keine Modem-Messwerte vor."]],
+  ["Aansluiting niet gemeten",["Connection not measured","Conexión sin medir","Verbindung nicht gemessen"]],
+  [" apparaten · Sleep een knooppunt of de achtergrond. Zoom met het muiswiel of twee vingers.",[" devices · Drag a node or the background. Zoom with the mouse wheel or two fingers."," dispositivos · Arrastra un nodo o el fondo. Usa la rueda del ratón o dos dedos para cambiar el zoom."," Geräte · Ziehe einen Knoten oder den Hintergrund. Zoome mit dem Mausrad oder zwei Fingern."]],
+  ["Nog geen apparaten beschikbaar.",["No devices available yet.","Todavía no hay dispositivos disponibles.","Noch keine Geräte verfügbar."]],
+  ["Geen meting in deze periode.",["No measurement in this period.","No hay mediciones en este período.","Keine Messung in diesem Zeitraum."]],
+  ["Interface onbekend",["Unknown interface","Interfaz desconocida","Unbekannte Schnittstelle"]],
+  [" · laatste meetronde ",[" · last measurement at "," · última medición a las "," · letzte Messung um "]],
+  [" · historie vanaf ",[" · history since "," · historial desde "," · Verlauf ab "]],
+  ["Wachten op de eerste meetronde",["Waiting for the first measurement","Esperando la primera medición","Warte auf die erste Messung"]],
+  ["OpenWrt-apparaatnamen niet beschikbaar. ",["OpenWrt device names are unavailable. ","Los nombres de dispositivos OpenWrt no están disponibles. ","OpenWrt-Gerätenamen sind nicht verfügbar. "]],
+  ["Stel OpenWrt in onder HA-Bandwidth → Configuratie.",["Set up OpenWrt under HA-Bandwidth → Configuration.","Configura OpenWrt en HA-Bandwidth → Configuración.","Richte OpenWrt unter HA-Bandwidth → Konfiguration ein."]],
+  ["IP-meting staat uit.",["IP monitoring is disabled.","La medición IP está desactivada.","Die IP-Messung ist deaktiviert."]],
+  ["Actief zonder bruikbare tellers: ",["Active without usable counters: ","Activos sin contadores utilizables: ","Aktiv ohne nutzbare Zähler: "]],
+  ["Automatische back-ups",["Automatic backups","Copias de seguridad automáticas","Automatische Sicherungen"]],
+  ["Dinsdag t/m zondag een dagback-up, maandag een weekback-up. {count} van {limit} opgeslagen.",["Daily backup Tuesday through Sunday, weekly backup on Monday. {count} of {limit} saved.","Copia diaria de martes a domingo y semanal el lunes. {count} de {limit} guardadas.","Tägliche Sicherung von Dienstag bis Sonntag, wöchentliche Sicherung am Montag. {count} von {limit} gespeichert."]],
+  ["Weekback-up",["Weekly backup","Copia semanal","Wöchentliche Sicherung"]],
+  ["Dagback-up",["Daily backup","Copia diaria","Tägliche Sicherung"]],
+  ["Terugzetten",["Restore","Restaurar","Wiederherstellen"]],
+  ["Verwijderen",["Delete","Eliminar","Löschen"]],
+  ["Deze back-up terugzetten? De huidige meetgegevens worden vervangen.",["Restore this backup? The current measurements will be replaced.","¿Restaurar esta copia? Se sustituirán las mediciones actuales.","Diese Sicherung wiederherstellen? Die aktuellen Messdaten werden ersetzt."]],
+  ["Deze back-up definitief verwijderen?",["Permanently delete this backup?","¿Eliminar esta copia de forma permanente?","Diese Sicherung endgültig löschen?"]],
+  ["De meetgegevens zijn teruggezet.",["Measurements restored.","Se han restaurado las mediciones.","Die Messdaten wurden wiederhergestellt."]],
+  ["Back-up verwijderd.",["Backup deleted.","Copia eliminada.","Sicherung gelöscht."]],
+  ["Het bestand is groter dan 256 MiB.",["The file exceeds 256 MiB.","El archivo supera los 256 MiB.","Die Datei ist größer als 256 MiB."]],
+  ["Back-up terugzetten…",["Restoring backup…","Restaurando copia…","Sicherung wird wiederhergestellt…"]],
+  ["Terugzetten mislukt. ",["Restore failed. ","No se pudo restaurar la copia. ","Wiederherstellung fehlgeschlagen. "]],
+  ["Dashboard kon de metingen niet ophalen (",["Could not load measurements (","No se pudieron cargar las mediciones (","Messwerte konnten nicht geladen werden ("]],
+  ["Deze back-up is niet meer beschikbaar.",["This backup is no longer available.","Esta copia ya no está disponible.","Diese Sicherung ist nicht mehr verfügbar."]],
+  ["De bewerking is mislukt. Bekijk het app-logboek.",["The operation failed. Check the app log.","La operación falló. Consulta el registro de la aplicación.","Der Vorgang ist fehlgeschlagen. Prüfe das App-Protokoll."]],
+  ["Dit bestand kon niet worden teruggezet als SQLite-back-up.",["This file could not be restored as a SQLite backup.","No se pudo restaurar este archivo como copia SQLite.","Diese Datei konnte nicht als SQLite-Sicherung wiederhergestellt werden."]],
+  ["Het terugzetten of opslaan van de herstelkopie is mislukt.",["Could not restore the backup or save the recovery copy.","No se pudo restaurar la copia o guardar la copia de recuperación.","Die Sicherung konnte nicht wiederhergestellt oder die Wiederherstellungskopie nicht gespeichert werden."]],
+  ["Het SQLite-bestand is beschadigd.",["The SQLite file is corrupt.","El archivo SQLite está dañado.","Die SQLite-Datei ist beschädigt."]],
+  ["Dit bestand bevat geen ondersteunde HA-Bandwidth-database.",["This file does not contain a supported HA-Bandwidth database.","Este archivo no contiene una base de datos compatible de HA-Bandwidth.","Diese Datei enthält keine unterstützte HA-Bandwidth-Datenbank."]],
+  ["De back-up bevat ongeldige meetgegevens.",["The backup contains invalid measurements.","La copia contiene mediciones no válidas.","Die Sicherung enthält ungültige Messdaten."]],
+  ["Lokaal",["Local","Local","Lokal"]],
+  ["Publiek",["Public","Pública","Öffentlich"]],
+  ["Onbekend",["Unknown","Desconocido","Unbekannt"]],
+  ["Bekabeld",["Wired","Cableado","Kabelgebunden"]],
+]);
+
+const languageSelect = document.getElementById("dashboard-language");
+const languageKey = "ha-bandwidth.language";
+const pageUrl = new URL(window.location.href);
+const requestedLanguage = pageUrl.searchParams.get("lang");
+let savedLanguage;
+try {
+  savedLanguage = window.localStorage.getItem(languageKey);
+} catch {
+  // The URL keeps the selection when browser storage is blocked.
+}
+const language = Object.hasOwn(locales, requestedLanguage) ? requestedLanguage
+  : Object.hasOwn(locales, savedLanguage) ? savedLanguage : "nl";
+const locale = locales[language];
+
+function t(message, values = {}) {
+  const translated = translations.get(message)?.[translationColumn[language]] ?? message;
+  return translated.replace(/\{(\w+)\}/g, (placeholder, key) => values[key] ?? placeholder);
+}
+
+document.documentElement.lang = language;
+languageSelect.value = language;
+const textNodes = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+for (let node = textNodes.nextNode(); node; node = textNodes.nextNode()) {
+  const label = node.data.trim();
+  if (translations.has(label)) node.data = node.data.replace(label, () => t(label));
+}
+for (const element of document.querySelectorAll("main [aria-label], main [placeholder]")) {
+  for (const attribute of ["aria-label", "placeholder"]) {
+    if (element.hasAttribute(attribute)) element.setAttribute(attribute, t(element.getAttribute(attribute)));
+  }
+}
+languageSelect.addEventListener("change", () => {
+  try {
+    window.localStorage.setItem(languageKey, languageSelect.value);
+    if (!pageUrl.searchParams.has("lang")) {
+      window.location.reload();
+      return;
+    }
+    pageUrl.searchParams.delete("lang");
+  } catch {
+    pageUrl.searchParams.set("lang", languageSelect.value);
+  }
+  window.location.assign(pageUrl);
+});
+
 const el = id => document.getElementById(id);
-const format = new Intl.NumberFormat("nl-NL", {maximumFractionDigits: 2});
+const format = new Intl.NumberFormat(locale, {maximumFractionDigits: 2});
 const views = {
-  device: ["Internetverkeer per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor. Klik op een apparaat om alleen het verkeer daarvan te bekijken.", "Verkeer per apparaat"],
-  compare: ["OpenWrt WAN telt het internetverkeer van alle apparaten die via de router online gaan. De HA-server telt op zijn eigen netwerkinterface ook lokaal verkeer mee.", ""],
-  host: ["Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal.", "Verkeer per netwerkinterface"],
-  app: ["Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal.", "Top 30 apps en containers"],
-  peer: ["Bron-IP voor downloads en doel-IP voor uploads op de serverinterface. Dit zijn waargenomen IP-bytes.", "Top 30 IP-adressen"],
+  device: [t("Internetverkeer per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor. Klik op een apparaat om alleen het verkeer daarvan te bekijken."), t("Verkeer per apparaat")],
+  compare: [t("OpenWrt WAN telt het internetverkeer van alle apparaten die via de router online gaan. De HA-server telt op zijn eigen netwerkinterface ook lokaal verkeer mee."), ""],
+  host: [t("Netwerkinterface van de server. Lokaal verkeer en internetverkeer zitten in dit totaal."), t("Verkeer per netwerkinterface")],
+  app: [t("Verkeer van containers met eigen tellers. Dit kan intern Docker-verkeer bevatten en overlapt deels met het servertotaal."), t("Top 30 apps en containers")],
+  peer: [t("Bron-IP voor downloads en doel-IP voor uploads op de serverinterface. Dit zijn waargenomen IP-bytes."), t("Top 30 IP-adressen")],
 };
-const months = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+const monthFormat = new Intl.DateTimeFormat(locale, {month: "short", timeZone: "UTC"});
+const dateFormat = new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeZone: "UTC"});
+const months = Array.from({length: 12}, (_, index) => monthFormat.format(Date.UTC(2020, index, 1)));
 let kind = "host";
 let period = "day";
 let source = "";
@@ -18,7 +207,7 @@ let request = 0;
 let focusDestinations = false;
 const tableControls = new Map();
 const ipDetails = new Map();
-const tableCollator = new Intl.Collator("nl-NL", {numeric: true, sensitivity: "base"});
+const tableCollator = new Intl.Collator(locale, {numeric: true, sensitivity: "base"});
 
 function updateTable(id) {
   const body = el(id);
@@ -28,9 +217,9 @@ function updateTable(id) {
     const input = document.createElement("input");
     input.type = "search";
     input.className = "table-filter";
-    input.placeholder = "Filter deze tabel…";
-    input.setAttribute("aria-label", "Filter " + ({
-      rows: "verkeer", "destination-rows": "bestemmingen", "comparison-rows": "vergelijking",
+    input.placeholder = t("Filter deze tabel…");
+    input.setAttribute("aria-label", t("Filter ") + ({
+      rows: t("verkeer"), "destination-rows": t("bestemmingen"), "comparison-rows": t("vergelijking"),
     })[id]);
     table.parentElement.before(input);
     control = {input, views: new Map(), headings: [...table.querySelectorAll("th")]};
@@ -61,7 +250,7 @@ function updateTable(id) {
   control.state = state;
   if (control.input.value !== state.query) control.input.value = state.query;
   control.input.hidden = body.rows.length === 0;
-  const tokens = state.query.toLocaleLowerCase("nl-NL").trim().split(/\s+/).filter(Boolean);
+  const tokens = state.query.toLocaleLowerCase(locale).trim().split(/\s+/).filter(Boolean);
   const rows = [...body.rows];
   rows.sort((left, right) => {
     const a = left.cells[state.column];
@@ -74,7 +263,7 @@ function updateTable(id) {
     return state.direction * order;
   });
   for (const row of rows) {
-    const searchable = (row.textContent + " " + (row.dataset.search || "")).toLocaleLowerCase("nl-NL");
+    const searchable = (row.textContent + " " + (row.dataset.search || "")).toLocaleLowerCase(locale);
     row.hidden = !tokens.every(token => searchable.includes(token));
     body.append(row);
   }
@@ -96,8 +285,8 @@ function addRouterHost(cell, host) {
   if (!host) return;
   const label = document.createElement("span");
   label.className = "ip-result";
-  label.textContent = [host.name || "Apparaat zonder naam", host.mac].filter(Boolean).join(" · ");
-  label.title = "Huidige apparaatkoppeling uit OpenWrt";
+  label.textContent = [host.name || t("Apparaat zonder naam"), host.mac].filter(Boolean).join(" · ");
+  label.title = t("Huidige apparaatkoppeling uit OpenWrt");
   cell.append(label);
 }
 
@@ -107,7 +296,7 @@ function addIpLookup(cell, ip, stored) {
   button.type = "button";
   button.textContent = "IPinfo";
   button.className = "ip-lookup";
-  button.setAttribute("aria-label", "Zoek netwerk en domein op voor " + ip);
+  button.setAttribute("aria-label", t("Zoek netwerk en domein op voor ") + ip);
   const result = document.createElement("span");
   result.className = "ip-result";
   result.setAttribute("role", "status");
@@ -116,15 +305,15 @@ function addIpLookup(cell, ip, stored) {
     button.hidden = Boolean(details && !details.pending && !details.error &&
       (details.asn || details.as_name || details.as_domain));
     button.disabled = details?.pending === true;
-    result.textContent = details?.pending ? "Netwerk opzoeken…"
+    result.textContent = details?.pending ? t("Netwerk opzoeken…")
       : details?.error || (details && [details.asn, details.as_name, details.as_domain].filter(Boolean).join(" · "))
-        || (details ? "Geen netwerkgegevens gevonden." : "");
+        || (details ? t("Geen netwerkgegevens gevonden.") : "");
     if (details && !details.pending) {
       const link = document.createElement("a");
       link.href = "https://ipinfo.io/" + encodeURIComponent(ip);
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.textContent = "Bekijk op IPinfo";
+      link.textContent = t("Bekijk op IPinfo");
       result.append(" ", link);
     }
     cell.parentElement.dataset.search = ip + " " + result.textContent;
@@ -136,9 +325,9 @@ function addIpLookup(cell, ip, stored) {
       try {
         const response = await fetch("./api/ipinfo?" + new URLSearchParams({ip}));
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "IPinfo ophalen mislukt.");
+        if (!response.ok) throw new Error(data.error ? t(data.error) : t("IPinfo ophalen mislukt."));
         if (data.asn || data.as_name || data.as_domain) ipDetails.set(ip, data);
-        else ipDetails.set(ip, {error: "Geen netwerkgegevens gevonden."});
+        else ipDetails.set(ip, {error: t("Geen netwerkgegevens gevonden.")});
       } catch (error) {
         ipDetails.set(ip, {error: error.message});
       }
@@ -174,7 +363,7 @@ function timeline(data) {
   if (period === "day") {
     for (let hour = 0; hour < 24; hour++) {
       const label = String(hour).padStart(2, "0");
-      slots.push([data.start + "T" + label, hour % 3 === 0 ? label + "u" : ""]);
+      slots.push([data.start + "T" + label, hour % 3 === 0 ? label + ":00" : ""]);
     }
   } else if (period === "year") {
     months.forEach((month, index) => {
@@ -188,8 +377,8 @@ function timeline(data) {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
-  const sources = [["", values, kind === "compare" ? "HA-server" : ""]];
-  if (kind === "compare") sources.push(["modem-", router, data.router_label], ["cellular-", modem, data.modem_label]);
+  const sources = [["", values, kind === "compare" ? t("HA-server") : ""]];
+  if (kind === "compare") sources.push(["modem-", router, data.router_label], ["cellular-", modem, t(data.modem_label)]);
   const readings = sources.flatMap(([, series]) => [...series.values()]);
   const step = Math.max(1, ...readings.flatMap(row => [row.rx, row.tx])) / 5;
   const above = Math.max(1, Math.ceil(Math.max(...readings.map(row => row.rx)) / step));
@@ -241,7 +430,7 @@ function timeline(data) {
   graph.append(cursor);
   const details = el("chart-details");
   const clear = () => {
-    details.textContent = "Wijs een tijdvak aan voor de waarden.";
+    details.textContent = t("Wijs een tijdvak aan voor de waarden.");
     cursor.setAttribute("visibility", "hidden");
   };
   clear();
@@ -252,10 +441,10 @@ function timeline(data) {
   slots.forEach(([key, tick], index) => {
     const summary = sources.flatMap(([, series, label]) => {
       const row = series.get(key);
-      return row ? [(label ? label + " " : "") + "download " + bytes(row.rx) + " / upload " + bytes(row.tx)] : [];
+      return row ? [(label ? label + " " : "") + t("Download") + " " + bytes(row.rx) + " / " + t("Upload") + " " + bytes(row.tx)] : [];
     });
     const caption = key.replace("T", " ") + (period === "day" ? ":00" : "") + " · " +
-      (summary.join(" · ") || "Geen meting");
+      (summary.join(" · ") || t("Geen meting"));
     const target = document.createElement("button");
     target.type = "button";
     target.setAttribute("aria-label", caption);
@@ -312,23 +501,23 @@ function showDestinations(data) {
     return;
   }
   const title = el("destinations-title");
-  title.textContent = kind === "host" ? "Grootste bronnen en bestemmingen van de server" : "Bestemmingen · " + sourceLabel;
+  title.textContent = kind === "host" ? t("Grootste bronnen en bestemmingen van de server") : t("Bestemmingen · ") + sourceLabel;
   const rows = data.destinations;
   const body = el("destination-rows");
   body.replaceChildren();
   el("destinations-table").hidden = rows.length === 0;
-  let note = "Waargenomen IP-verkeer. TLS geeft een zichtbare domeinnaam aan. DNS is een aanwijzing.";
+  let note = t("Waargenomen IP-verkeer. TLS geeft een zichtbare domeinnaam aan. DNS is een aanwijzing.");
   if (rows.length === 0) {
     const enabled = kind === "host" ? data.status.peers_enabled : data.status.app_destinations_enabled;
     note = enabled === false
-      ? "De bestemmingsmeting staat uit."
+      ? t("De bestemmingsmeting staat uit.")
       : kind === "host"
-        ? "Nog geen bronnen of bestemmingen gemeten voor deze periode. De serverdetails beginnen bij versie 0.5.0."
-        : "Geen bestemmingen gemeten voor deze app en periode.";
+        ? t("Nog geen bronnen of bestemmingen gemeten voor deze periode. De serverdetails beginnen bij versie 0.5.0.")
+        : t("Geen bestemmingen gemeten voor deze app en periode.");
   } else {
-    if (kind === "host") note += " Bij download zie je het bron-IP. Bij upload zie je het doel-IP.";
-    if (rows.some(row => row.router_host)) note += " Apparaatnamen en MAC-adressen komen uit de huidige OpenWrt-lijst.";
-    if (data.destinations_truncated) note += " De tabel toont de 100 grootste regels.";
+    if (kind === "host") note += t(" Bij download zie je het bron-IP. Bij upload zie je het doel-IP.");
+    if (rows.some(row => row.router_host)) note += t(" Apparaatnamen en MAC-adressen komen uit de huidige OpenWrt-lijst.");
+    if (data.destinations_truncated) note += t(" De tabel toont de 100 grootste regels.");
   }
   el("destinations-note").textContent = note;
   for (const row of rows) {
@@ -337,7 +526,7 @@ function showDestinations(data) {
     const name = row.router_host?.name || "";
     tr.insertCell().textContent = [domain, name].filter(Boolean).join(" · ") || "—";
     const ipCell = tr.insertCell();
-    ipCell.textContent = row.ip || "Overige verbindingen";
+    ipCell.textContent = row.ip || t("Overige verbindingen");
     if (row.router_host?.mac) {
       const mac = document.createElement("span");
       mac.className = "ip-result";
@@ -345,7 +534,7 @@ function showDestinations(data) {
       ipCell.append(mac);
     }
     addIpLookup(ipCell, row.lookup_ip, row.ipinfo);
-    tr.insertCell().textContent = row.scope;
+    tr.insertCell().textContent = t(row.scope);
     tr.insertCell().textContent = row.protocol || "—";
     const port = tr.insertCell();
     port.textContent = row.port >= 0 ? row.port : "—";
@@ -362,11 +551,11 @@ function showDestinations(data) {
 function showComparison(data) {
   const body = el("comparison-rows");
   body.replaceChildren();
-  el("router-download-legend").textContent = data.router_label + " download";
-  el("router-upload-legend").textContent = data.router_label + " upload";
-  el("cellular-download-legend").textContent = data.modem_label + " download";
-  el("cellular-upload-legend").textContent = data.modem_label + " upload";
-  for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.router_buckets], [data.modem_label, data.modem_buckets]]) {
+  el("router-download-legend").textContent = data.router_label + " " + t("Download");
+  el("router-upload-legend").textContent = data.router_label + " " + t("Upload");
+  el("cellular-download-legend").textContent = t(data.modem_label) + " " + t("Download");
+  el("cellular-upload-legend").textContent = t(data.modem_label) + " " + t("Upload");
+  for (const [label, values] of [["HA-server", data.buckets], [data.router_label, data.router_buckets], [t(data.modem_label), data.modem_buckets]]) {
     const row = body.insertRow();
     row.insertCell().textContent = label;
     const rx = values.reduce((total, item) => total + item.rx, 0);
@@ -374,13 +563,13 @@ function showComparison(data) {
     countCells(row, rx, tx, values.length > 0);
   }
   updateTable("comparison-rows");
-  const device = data.status.router_device ? "OpenWrt-interface actief: " + data.status.router_device + "." : "";
+  const device = data.status.router_device ? t("OpenWrt-interface actief: ") + data.status.router_device + "." : "";
   const routerStatus = data.status.router_error || (data.status.router_configured
-    ? device : "OpenWrt is niet ingesteld.");
+    ? device : t("OpenWrt is niet ingesteld."));
   const modemStatus = data.status.modem_error || (!data.status.modem_configured
-    ? "Vul modem_download_entity en modem_upload_entity in bij Configuratie."
-    : data.status.modem_phase ? data.modem_label + ": " + data.status.modem_phase + "."
-      : data.modem_buckets.length ? "" : "Nog geen modemmetingen voor deze periode.");
+    ? t("Vul modem_download_entity en modem_upload_entity in bij Configuratie.")
+    : data.status.modem_phase ? t(data.modem_label) + ": " + t(data.status.modem_phase) + "."
+      : data.modem_buckets.length ? "" : t("Nog geen modemmetingen voor deze periode."));
   el("modem-status").textContent = [routerStatus, modemStatus].filter(Boolean).join(" · ");
 }
 
@@ -507,17 +696,17 @@ function showTopology(data) {
       if (id === modemIp || device.ips.includes(modemIp)) devices.delete(id);
     }
   }
-  const search = el("topology-search").value.trim().toLocaleLowerCase("nl-NL");
+  const search = el("topology-search").value.trim().toLocaleLowerCase(locale);
   const groups = new Map();
   for (const device of devices.values()) {
-    if (search && ![device.name, device.source, device.ssid, device.connection, device.port, ...device.ips].join(" ").toLocaleLowerCase("nl-NL").includes(search)) continue;
-    const name = device.connection || "Aansluiting niet gemeten";
+    if (search && ![device.name, device.source, device.ssid, device.connection, device.port, ...device.ips].join(" ").toLocaleLowerCase(locale).includes(search)) continue;
+    const name = device.connection || t("Aansluiting niet gemeten");
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(device);
   }
   el("topology-note").textContent = devices.size
-    ? devices.size + " apparaten · Sleep een knooppunt of de achtergrond. Zoom met het muiswiel of twee vingers."
-    : "Nog geen apparaten beschikbaar.";
+    ? devices.size + t(" apparaten · Sleep een knooppunt of de achtergrond. Zoom met het muiswiel of twee vingers.")
+    : t("Nog geen apparaten beschikbaar.");
   el("topology-cloud").hidden = !devices.size;
   el("topology-search").hidden = !devices.size;
   el("topology-no-match").hidden = groups.size > 0;
@@ -541,7 +730,7 @@ function showTopology(data) {
     el("topology-device-name").textContent = device.name || device.ips[0] || id;
     el("topology-device-address").textContent = [...new Set([...device.ips, id])].join(" · ") + (device.connection ? " · " + [device.connection, device.ssid, device.port].filter(Boolean).join(" · ") : "");
     el("topology-device-traffic").textContent = row
-      ? "Download " + bytes(row.rx) + " · Upload " + bytes(row.tx) : "Geen meting in deze periode.";
+      ? t("Download") + " " + bytes(row.rx) + " · " + t("Upload") + " " + bytes(row.tx) : t("Geen meting in deze periode.");
     const button = el("topology-graph");
     button.hidden = !row;
     button.onclick = row ? () => {
@@ -631,22 +820,23 @@ function showTopology(data) {
 function show(data) {
   const status = data.status;
   el("status").textContent = status.updated
-    ? (status.interface || "Interface onbekend") + " · laatste meetronde " +
-      new Date(status.updated).toLocaleTimeString("nl-NL", {timeZone: status.zone}) +
-      (data.first ? " · historie vanaf " + data.first.slice(0, 10) : "")
-    : "Wachten op de eerste meetronde";
+    ? (status.interface || t("Interface onbekend")) + t(" · laatste meetronde ") +
+      new Date(status.updated).toLocaleTimeString(locale, {timeZone: status.zone}) +
+      (data.first ? t(" · historie vanaf ") + data.first.slice(0, 10) : "")
+    : t("Wachten op de eerste meetronde");
   const warnings = [...(status.errors || [])];
   if (["host", "peer", "app"].includes(kind) && status.host_hints_error) {
-    warnings.push("OpenWrt-apparaatnamen niet beschikbaar. " + status.host_hints_error);
+    warnings.push(t("OpenWrt-apparaatnamen niet beschikbaar. ") + status.host_hints_error);
   }
   if (kind === "device") {
     if (status.device_error) warnings.push(status.device_error);
-    else if (status.device_configured === false) warnings.push("Stel OpenWrt in onder HA-Bandwidth → Configuratie.");
+    else if (status.device_configured === false) warnings.push(t("Stel OpenWrt in onder HA-Bandwidth → Configuratie."));
   }
-  if (kind === "peer" && status.peers_enabled === false) warnings.push("IP-meting staat uit.");
+  if (kind === "peer" && status.peers_enabled === false) warnings.push(t("IP-meting staat uit."));
   el("warnings").hidden = warnings.length === 0;
   el("warnings").textContent = warnings.join(" · ");
-  el("range").textContent = data.start === data.end ? data.start : data.start + " t/m " + data.end;
+  el("range").textContent = data.start === data.end ? dateFormat.format(new Date(data.start))
+    : dateFormat.formatRange(new Date(data.start), new Date(data.end));
   const comparing = kind === "compare";
   el("comparison").hidden = !comparing;
   el("comparison-legend").hidden = !comparing;
@@ -660,7 +850,7 @@ function show(data) {
   el("download").textContent = hasData ? bytes(rx) : "—";
   el("upload").textContent = hasData ? bytes(tx) : "—";
   el("total").textContent = hasData ? bytes(rx + tx) : "—";
-  el("chart-title").textContent = sourceLabel || "Verkeer over tijd";
+  el("chart-title").textContent = sourceLabel || t("Verkeer over tijd");
   el("clear").hidden = !source;
   el("empty").hidden = hasData;
   el("chart").parentElement.hidden = !hasData;
@@ -672,34 +862,34 @@ function show(data) {
   el("shared-section").hidden = kind !== "app" || !(status.shared?.length || status.unavailable?.length);
   el("shared").textContent = status.shared?.join(", ") || "";
   el("unavailable").textContent = status.unavailable?.length
-    ? "Actief zonder bruikbare tellers: " + status.unavailable.join(", ") : "";
+    ? t("Actief zonder bruikbare tellers: ") + status.unavailable.join(", ") : "";
 }
 
 const scheduledBackups = document.createElement("section");
-scheduledBackups.setAttribute("aria-label", "Automatische back-ups");
+scheduledBackups.setAttribute("aria-label", t("Automatische back-ups"));
 el("backup-panel").append(scheduledBackups);
 
 function renderScheduledBackups(data) {
   const title = document.createElement("h3");
-  title.textContent = "Automatische back-ups";
+  title.textContent = t("Automatische back-ups");
   const schedule = document.createElement("p");
   const backups = data.scheduled || [];
-  schedule.textContent = `Dinsdag t/m zondag een dagback-up, maandag een weekback-up. ${backups.length} van ${data.limit} opgeslagen.`;
+  schedule.textContent = t("Dinsdag t/m zondag een dagback-up, maandag een weekback-up. {count} van {limit} opgeslagen.", {count: backups.length, limit: data.limit});
   const list = document.createElement("ul");
   for (const name of backups) {
     const item = document.createElement("li");
-    const date = name.slice(0, 10).split("-").reverse().join("-");
-    const label = (name.endsWith("-weekly.sqlite3") ? "Weekback-up" : "Dagback-up") + " " + date;
+    const date = dateFormat.format(new Date(name.slice(0, 10)));
+    const label = (name.endsWith("-weekly.sqlite3") ? t("Weekback-up") : t("Dagback-up")) + " " + date;
     item.append(label + " ");
-    for (const [action, caption] of [["restore", "Terugzetten"], ["delete", "Verwijderen"]]) {
+    for (const [action, caption] of [["restore", t("Terugzetten")], ["delete", t("Verwijderen")]]) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = caption;
       button.setAttribute("aria-label", caption + " " + label);
       button.onclick = async () => {
         const question = action === "restore"
-          ? "Deze back-up terugzetten? De huidige meetgegevens worden vervangen."
-          : "Deze back-up definitief verwijderen?";
+          ? t("Deze back-up terugzetten? De huidige meetgegevens worden vervangen.")
+          : t("Deze back-up definitief verwijderen?");
         if (!window.confirm(label + "\n\n" + question)) return;
         button.disabled = true;
         const status = el("backup-status");
@@ -709,9 +899,9 @@ function renderScheduledBackups(data) {
             headers: {"X-HA-Bandwidth-Restore": "1"},
           });
           const result = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+          if (!response.ok) throw new Error(result.error ? t(result.error) : "HTTP " + response.status);
           if (action === "restore") ipDetails.clear();
-          status.textContent = action === "restore" ? "De meetgegevens zijn teruggezet." : "Back-up verwijderd.";
+          status.textContent = action === "restore" ? t("De meetgegevens zijn teruggezet.") : t("Back-up verwijderd.");
           await backupStatus();
         } catch (error) {
           status.textContent = error.message;
@@ -744,12 +934,12 @@ el("restore-form").addEventListener("submit", async event => {
   if (!file || !el("restore-confirm").checked) return;
   const status = el("backup-status");
   if (file.size > 256 * 1024 * 1024) {
-    status.textContent = "Het bestand is groter dan 256 MiB.";
+    status.textContent = t("Het bestand is groter dan 256 MiB.");
     return;
   }
   const button = el("restore-button");
   button.disabled = true;
-  status.textContent = "Back-up terugzetten…";
+  status.textContent = t("Back-up terugzetten…");
   try {
     const response = await fetch("./api/backup/restore", {
       method: "POST",
@@ -757,13 +947,13 @@ el("restore-form").addEventListener("submit", async event => {
       body: file,
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+    if (!response.ok) throw new Error(result.error ? t(result.error) : "HTTP " + response.status);
     ipDetails.clear();
     event.target.reset();
-    status.textContent = "De meetgegevens zijn teruggezet.";
+    status.textContent = t("De meetgegevens zijn teruggezet.");
     await backupStatus();
   } catch (error) {
-    status.textContent = "Terugzetten mislukt. " + error.message;
+    status.textContent = t("Terugzetten mislukt. ") + error.message;
   } finally {
     button.disabled = false;
   }
@@ -790,7 +980,7 @@ async function load() {
   } catch (error) {
     if (id !== request) return;
     el("warnings").hidden = false;
-    el("warnings").textContent = "Dashboard kon de metingen niet ophalen (" + error.message + ").";
+    el("warnings").textContent = t("Dashboard kon de metingen niet ophalen (") + error.message + ").";
     el("destinations").hidden = true;
   }
 }

@@ -8,7 +8,10 @@ h1{font-size:clamp(2rem,5vw,3.5rem);letter-spacing:-.05em}
 h2{font-size:1.1rem}
 p{color:var(--muted)}
 .eyebrow{color:var(--rx);font-weight:700;font-size:.75rem;letter-spacing:.15em}
-header{margin-bottom:1.4rem}
+header{margin-bottom:1.4rem;display:flow-root}
+.language-bar{float:inline-end;display:flex;align-items:center;gap:.5rem;margin:0 0 .6rem .8rem}
+.language-bar select{font:inherit;color:var(--text);padding:.45em .75em;border:1px solid var(--line);background:#15243a;border-radius:9px}
+@media(max-width:480px){.language-bar{float:none;justify-content:flex-end;margin-inline-start:0}}
 nav,.controls,.section-head{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
 .controls,.section-head{justify-content:space-between}
 .controls{margin:1rem 0}
