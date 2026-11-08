@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.14
+
+- Alle Lovelace-kaarten gebruiken de beschikbare kaartbreedte. Op smalle kaarten passen de bediening, totalen, grafiek en netwerkkaart zich aan.
+
 ## 0.10.13
 
 - Het Lovelace-dashboard gebruikt afzonderlijk bewerkbare HA-Bandwidth-kaarten op alle tabbladen. De kaarten gebruiken dezelfde grafieken, tabellen en bediening als de app en delen de periode en bronselectie binnen een tabblad.

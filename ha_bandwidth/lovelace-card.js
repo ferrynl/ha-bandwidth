@@ -127,9 +127,37 @@ class HABandwidthCard extends HTMLElement {
         .filter(selector => !only.includes(selector)).map(selector => ".bandwidth-surface " + selector)
         .join(",") + "{display:none!important}" : "";
       style.textContent = css.replaceAll(":root", ":host").replace(/\bbody(?=[\s{\[])/g, ".bandwidth-surface") + hide + `
-        :host{display:block}
-        .bandwidth-surface{min-height:0;border-radius:var(--ha-card-border-radius,12px)}
-        .bandwidth-surface main{padding:${part === "overview" ? "clamp(16px,4vw,52px)" : ".7rem"}}
+        :host{display:block;min-width:0}
+        .bandwidth-surface{
+          container:bandwidth / inline-size;
+          min-height:0;
+          border-radius:var(--ha-card-border-radius,12px);
+        }
+        .bandwidth-surface main{
+          max-width:none;
+          padding:clamp(.65rem,2cqi,1.5rem);
+          overflow-wrap:anywhere;
+        }
+        .bandwidth-surface .card{padding:clamp(.65rem,2cqi,1.5rem)}
+        .bandwidth-surface main > .card:last-child,
+        .bandwidth-surface .totals .card{margin-bottom:0}
+        .bandwidth-surface .controls{justify-content:flex-start;gap:.5rem 1rem}
+        .bandwidth-surface :is(input,select,button){max-width:100%}
+        .bandwidth-surface #chart{min-width:0}
+        .bandwidth-surface .totals strong{
+          font-size:clamp(1rem,4cqi,2.25rem);
+          white-space:normal;
+        }
+        @container bandwidth (max-width:480px){
+          .language-bar{float:none;justify-content:flex-start;margin-inline-start:0}
+          .totals{gap:.35rem}
+          .plot-shell{--plot-height:180px;gap:.35rem}
+          #axis{flex-basis:3.6rem;font-size:.65rem}
+          #topology-map{height:20rem}
+        }
+        @container bandwidth (max-width:330px){
+          .totals{grid-template-columns:1fr}
+        }
       `;
       this.shadowRoot.replaceChildren(style, surface);
       const root = this.shadowRoot;
