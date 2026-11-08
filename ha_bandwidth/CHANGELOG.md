@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.9
+
+- Installatiecheck met stappen voor de MQTT-broker, MQTT-integratie, publicatie en gevonden Home Assistant-entiteiten.
+
 ## 0.10.8
 
 - Home Assistant ontdekt verkeerssensoren voor server, WAN, modem, apps en apparaten via MQTT.

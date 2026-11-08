@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
-from ha_mqtt import publish as publish_to_ha
+from ha_mqtt import publish as publish_to_ha, setup_status
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -581,6 +581,10 @@ class Dashboard(BaseHTTPRequestHandler):
                 self.send_json_error(500, "IPinfo kon niet worden opgeslagen of gelezen.")
                 return
             self.reply(json.dumps(data).encode(), "application/json")
+            return
+        if url.path == "/api/ha-setup":
+            status = setup_status(SETTINGS.get("publish_to_ha", True))
+            self.reply(json.dumps(status).encode(), "application/json")
             return
         if url.path == "/api/backup/status":
             with BACKUP_LOCK:

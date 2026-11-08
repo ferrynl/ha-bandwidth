@@ -105,3 +105,9 @@ body[data-dashboard-card]:not([data-dashboard-card="destinations"]):not([data-da
 body[data-dashboard-card]:not([data-dashboard-card="topology"]) #topology-panel,
 body[data-dashboard-card]:not([data-dashboard-card="comparison"]) #comparison,
 body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{display:none}
+
+#ha-setup-dialog{width:min(42rem,calc(100% - 2rem));max-height:85vh;overflow:auto;background:#101e30;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:1.2rem}
+#ha-setup-dialog::backdrop{background:rgba(0,0,0,.65)}
+#ha-setup-dialog li{margin-block:.75rem}
+#ha-setup-dialog li p{margin:.25rem 0}
+#ha-setup-dialog form{display:flex;gap:.5rem;flex-wrap:wrap}

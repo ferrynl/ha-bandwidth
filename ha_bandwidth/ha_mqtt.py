@@ -9,6 +9,7 @@ import threading
 import time
 from contextlib import closing
 from datetime import datetime
+from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from paho.mqtt import client as mqtt
@@ -19,6 +20,7 @@ SOURCES = {"host": "Server", "openwrt": "OpenWrt WAN", "modem": "Modem",
 PERIOD_NAMES = {"day": "Vandaag", "week": "Deze week", "month": "Deze maand", "year": "Dit jaar"}
 DIRECTIONS = {"rx": "Download", "tx": "Upload", "total": "Totaal"}
 PREFIX = "ha_bandwidth"
+LAST_PUBLISH = None
 
 
 def groups(db, starts, end, include_ips):
@@ -79,12 +81,45 @@ def discovery(key, label, field):
     }
 
 
-def supervisor_mqtt():
-    request = Request("http://supervisor/services/mqtt", headers={
+def supervisor_get(path, timeout=4):
+    request = Request("http://supervisor" + path, headers={
         "Authorization": "Bearer " + os.environ["SUPERVISOR_TOKEN"],
     })
-    with build_opener(ProxyHandler({})).open(request, timeout=8) as response:
-        return json.load(response)["data"]
+    with build_opener(ProxyHandler({})).open(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def supervisor_mqtt():
+    return supervisor_get("/services/mqtt")["data"]
+
+
+def setup_status(enabled):
+    broker = integration = entities = "unknown"
+    try:
+        service = supervisor_mqtt()
+        broker = "ready" if service.get("host") and service.get("port") else "missing"
+    except HTTPError as error:
+        if error.code in (400, 404):
+            broker = "missing"
+    except (OSError, ValueError, KeyError):
+        pass
+
+    try:
+        config = supervisor_get("/core/api/config")
+        components = config.get("components")
+        if isinstance(components, list):
+            integration = "ready" if "mqtt" in components else "missing"
+        if integration == "ready":
+            state = supervisor_get("/core/api/states/sensor.ha_bandwidth_host_day_rx")
+            entities = "pending" if state.get("state") == "unavailable" else "ready"
+    except HTTPError as error:
+        if integration == "ready" and error.code == 404:
+            entities = "pending"
+    except (OSError, ValueError, KeyError):
+        pass
+    publishing = LAST_PUBLISH is not None and time.monotonic() - LAST_PUBLISH < 180
+    return {"broker": broker, "integration": integration, "entities": entities,
+            "publisher": "disabled" if not enabled else "ready" if publishing else "pending"}
 
 
 def send(client, topic, payload):
@@ -95,6 +130,7 @@ def send(client, topic, payload):
 
 
 def publish(database, zone, period_bounds, include_ips, registry_path):
+    global LAST_PUBLISH
     registry = {}
     if registry_path.exists():
         try:
@@ -148,11 +184,13 @@ def publish(database, zone, period_bounds, include_ips, registry_path):
                 if not sent:
                     send(client, f"{PREFIX}/availability", "online")
                     logging.info("Home Assistant MQTT: %s verkeerssensoren aangeboden", len(current))
+                LAST_PUBLISH = time.monotonic()
                 sent = current
                 time.sleep(60)
         except (OSError, KeyError, ValueError, RuntimeError, sqlite3.Error) as error:
             logging.warning("Home Assistant MQTT niet beschikbaar (%s)", type(error).__name__)
         finally:
+            LAST_PUBLISH = None
             if client is not None:
                 if client.is_connected():
                     try:

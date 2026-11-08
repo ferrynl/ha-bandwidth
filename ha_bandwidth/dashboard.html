@@ -19,7 +19,7 @@
         <option value="de" lang="de">Deutsch</option>
       </select>
     </div>
-    <p class="ha-dashboard-export"><button id="download-ha-dashboard" type="button">Home Assistant-dashboard downloaden</button></p>
+    <p class="ha-dashboard-export"><button id="download-ha-dashboard" type="button">Home Assistant-dashboard downloaden</button> <button id="check-ha-setup" type="button">Home Assistant-installatie controleren</button></p>
     <div class="eyebrow">HOME ASSISTANT · NETWERK</div>
     <h1>HA-Bandwidth</h1>
     <p id="status" role="status">Metingen ophalen…</p>
@@ -138,6 +138,16 @@
     <p id="unavailable"></p>
   </section>
   </div>
+  <dialog id="ha-setup-dialog" aria-labelledby="ha-setup-title">
+    <h2 id="ha-setup-title">Home Assistant-installatie</h2>
+    <p>De MQTT-broker ontvangt de meetwaarden. De MQTT-integratie maakt er entiteiten van in Home Assistant.</p>
+    <p id="ha-setup-status" role="status"></p>
+    <ol id="ha-setup-steps"></ol>
+    <form method="dialog">
+      <button id="retry-ha-setup" type="button">Opnieuw controleren</button>
+      <button type="submit">Sluiten</button>
+    </form>
+  </dialog>
 </main>
 </body>
 </html>

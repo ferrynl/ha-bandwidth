@@ -3,6 +3,32 @@
 const locales = {nl: "nl-NL", en: "en-GB", es: "es-ES", de: "de-DE"};
 const translationColumn = {en: 0, es: 1, de: 2};
 const translations = new Map([
+  ["Home Assistant-installatie controleren",["Check Home Assistant setup","Comprobar la instalación de Home Assistant","Home-Assistant-Einrichtung prüfen"]],
+  ["Home Assistant-installatie",["Home Assistant setup","Instalación de Home Assistant","Home-Assistant-Einrichtung"]],
+  ["De MQTT-broker ontvangt de meetwaarden. De MQTT-integratie maakt er entiteiten van in Home Assistant.",["The MQTT broker receives measurements. The MQTT integration turns them into Home Assistant entities.","El broker MQTT recibe las mediciones. La integración MQTT las convierte en entidades de Home Assistant.","Der MQTT-Broker empfängt Messwerte. Die MQTT-Integration stellt sie als Entitäten in Home Assistant bereit."]],
+  ["Opnieuw controleren",["Check again","Comprobar de nuevo","Erneut prüfen"]],
+  ["Sluiten",["Close","Cerrar","Schließen"]],
+  ["Installatie wordt gecontroleerd…",["Checking setup…","Comprobando instalación…","Einrichtung wird geprüft…"]],
+  ["Alle controles zijn geslaagd.",["All checks passed.","Todas las comprobaciones son correctas.","Alle Prüfungen waren erfolgreich."]],
+  ["Volg de onderstaande stappen en controleer daarna opnieuw.",["Follow the steps below, then check again.","Sigue los pasos siguientes y vuelve a comprobar.","Befolge die folgenden Schritte und prüfe danach erneut."]],
+  ["De installatiecheck kon niet worden geladen. Probeer het opnieuw.",["Could not load the setup check. Try again.","No se pudo cargar la comprobación. Inténtalo de nuevo.","Die Prüfung konnte nicht geladen werden. Versuche es erneut."]],
+  ["MQTT-broker",["MQTT broker","Broker MQTT","MQTT-Broker"]],
+  ["MQTT-integratie",["MQTT integration","Integración MQTT","MQTT-Integration"]],
+  ["Publicatie vanuit HA-Bandwidth",["Publishing from HA-Bandwidth","Publicación desde HA-Bandwidth","Veröffentlichung durch HA-Bandwidth"]],
+  ["HA-Bandwidth-entiteiten",["HA-Bandwidth entities","Entidades de HA-Bandwidth","HA-Bandwidth-Entitäten"]],
+  ["Gereed",["Ready","Listo","Bereit"]],
+  ["Ontbreekt",["Missing","Falta","Fehlt"]],
+  ["Nog niet gereed",["Not ready yet","Aún no está listo","Noch nicht bereit"]],
+  ["Uitgeschakeld",["Disabled","Desactivado","Deaktiviert"]],
+  ["Niet te controleren",["Could not verify","No se pudo comprobar","Prüfung nicht möglich"]],
+  ["Installeer en start Mosquitto broker in de appstore, of start je bestaande MQTT-broker die bij Supervisor is geregistreerd.",["Install and start Mosquitto broker from the app store, or start your existing MQTT broker registered with Supervisor.","Instala e inicia Mosquitto broker desde la tienda de aplicaciones o inicia tu broker MQTT registrado en Supervisor.","Installiere und starte Mosquitto broker aus dem App-Store oder starte deinen bei Supervisor registrierten MQTT-Broker."]],
+  ["Open appstore",["Open app store","Abrir tienda de aplicaciones","App-Store öffnen"]],
+  ["Open Apparaten en diensten. Kies Configureren bij de gevonden MQTT-integratie, of kies Integratie toevoegen en zoek naar MQTT.",["Open Devices & services. Select Configure for discovered MQTT, or add an integration and search for MQTT.","Abre Dispositivos y servicios. Configura la integración MQTT detectada o añade una integración y busca MQTT.","Öffne Geräte und Dienste. Konfiguriere die erkannte MQTT-Integration oder füge eine Integration hinzu und suche nach MQTT."]],
+  ["Open Apparaten en diensten",["Open Devices & services","Abrir Dispositivos y servicios","Geräte und Dienste öffnen"]],
+  ["Zet publish_to_ha aan onder HA-Bandwidth → Configuratie en herstart de app.",["Enable publish_to_ha under HA-Bandwidth → Configuration and restart the app.","Activa publish_to_ha en HA-Bandwidth → Configuración y reinicia la aplicación.","Aktiviere publish_to_ha unter HA-Bandwidth → Konfiguration und starte die App neu."]],
+  ["Wacht ongeveer een minuut nadat de broker is gestart. Controleer het HA-Bandwidth-logboek als dit zo blijft.",["Wait about a minute after the broker starts. Check the HA-Bandwidth log if this persists.","Espera aproximadamente un minuto después de iniciar el broker. Consulta el registro de HA-Bandwidth si el problema continúa.","Warte nach dem Brokerstart etwa eine Minute. Prüfe das HA-Bandwidth-Protokoll, falls der Status bleibt."]],
+  ["Controleer of MQTT verbonden is met dezelfde broker en of MQTT Discovery aanstaat. Als je de sensoren hebt hernoemd, kijk dan bij het apparaat HA-Bandwidth.",["Check that MQTT is connected to the same broker and MQTT Discovery is enabled. If you renamed the sensors, check the HA-Bandwidth device.","Comprueba que MQTT esté conectado al mismo broker y que la detección MQTT esté activada. Si cambiaste el nombre de los sensores, consulta el dispositivo HA-Bandwidth.","Prüfe, ob MQTT mit demselben Broker verbunden und MQTT Discovery aktiviert ist. Wenn du Sensoren umbenannt hast, prüfe das Gerät HA-Bandwidth."]],
+  ["Home Assistant of Supervisor gaf geen bruikbaar antwoord. Probeer het opnieuw zodra Home Assistant volledig is gestart.",["Home Assistant or Supervisor did not return a usable response. Try again after Home Assistant has started fully.","Home Assistant o Supervisor no devolvió una respuesta válida. Inténtalo de nuevo cuando Home Assistant haya iniciado por completo.","Home Assistant oder Supervisor lieferte keine verwertbare Antwort. Versuche es nach dem vollständigen Start von Home Assistant erneut."]],
   ["Home Assistant-dashboard downloaden",["Download Home Assistant dashboard","Descargar panel de Home Assistant","Home Assistant-Dashboard herunterladen"]],
   ["Publiek IP",["Public IP","IP pública","Öffentliche IP"]],
   ["Lokaal / speciaal IP",["Local / special-use IP","IP local / de uso especial","Lokale IP / IP für besondere Zwecke"]],
@@ -1003,6 +1029,83 @@ for (const [key, change] of [
     });
   }
 }
+const setupDialog = el("ha-setup-dialog");
+const setupMessages = {
+  ready: "Gereed", missing: "Ontbreekt", pending: "Nog niet gereed",
+  disabled: "Uitgeschakeld", unknown: "Niet te controleren",
+};
+const setupChecks = [
+  ["broker", "MQTT-broker", "Installeer en start Mosquitto broker in de appstore, of start je bestaande MQTT-broker die bij Supervisor is geregistreerd.", "/hassio/store", "Open appstore"],
+  ["integration", "MQTT-integratie", "Open Apparaten en diensten. Kies Configureren bij de gevonden MQTT-integratie, of kies Integratie toevoegen en zoek naar MQTT.", "/config/integrations", "Open Apparaten en diensten"],
+  ["publisher", "Publicatie vanuit HA-Bandwidth", "Wacht ongeveer een minuut nadat de broker is gestart. Controleer het HA-Bandwidth-logboek als dit zo blijft."],
+  ["entities", "HA-Bandwidth-entiteiten", "Controleer of MQTT verbonden is met dezelfde broker en of MQTT Discovery aanstaat. Als je de sensoren hebt hernoemd, kijk dan bij het apparaat HA-Bandwidth.", "/config/integrations", "Open Apparaten en diensten"],
+];
+let checkingSetup = false;
+
+async function checkHASetup(showAlways = false) {
+  if (showAlways && !setupDialog.open) setupDialog.showModal();
+  if (checkingSetup) return;
+  checkingSetup = true;
+  const status = el("ha-setup-status");
+  const steps = el("ha-setup-steps");
+  const retry = el("retry-ha-setup");
+  status.textContent = t("Installatie wordt gecontroleerd…");
+  steps.replaceChildren();
+  retry.disabled = true;
+  try {
+    const response = await fetch("./api/ha-setup", {signal: AbortSignal.timeout(15000)});
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const result = await response.json();
+    const ready = setupChecks.every(([key]) => result[key] === "ready");
+    status.textContent = t(ready ? "Alle controles zijn geslaagd." : "Volg de onderstaande stappen en controleer daarna opnieuw.");
+    for (const [key, title, guidance, href, linkText] of setupChecks) {
+      const value = result[key];
+      const item = document.createElement("li");
+      const heading = document.createElement("strong");
+      heading.textContent = t(title) + " · " + t(setupMessages[value] || setupMessages.unknown);
+      item.append(heading);
+      if (value !== "ready") {
+        const detail = document.createElement("p");
+        detail.textContent = t(value === "unknown"
+          ? "Home Assistant of Supervisor gaf geen bruikbaar antwoord. Probeer het opnieuw zodra Home Assistant volledig is gestart."
+          : value === "disabled"
+            ? "Zet publish_to_ha aan onder HA-Bandwidth → Configuratie en herstart de app."
+            : guidance);
+        item.append(detail);
+        if (href && value !== "unknown") {
+          const link = document.createElement("a");
+          link.href = href;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = t(linkText);
+          item.append(link);
+        }
+      }
+      steps.append(item);
+    }
+    if (!ready && !setupDialog.open && !showAlways) setupDialog.showModal();
+  } catch {
+    status.textContent = t("De installatiecheck kon niet worden geladen. Probeer het opnieuw.");
+    if (!setupDialog.open && !showAlways) setupDialog.showModal();
+  } finally {
+    retry.disabled = false;
+    checkingSetup = false;
+  }
+}
+
+el("check-ha-setup").addEventListener("click", () => checkHASetup(true));
+el("retry-ha-setup").addEventListener("click", () => checkHASetup(true));
+if (!embeddedCards.has(embeddedCard)) {
+  let checked = false;
+  try {
+    checked = sessionStorage.getItem("ha-bandwidth.setup-checked") === "1";
+    sessionStorage.setItem("ha-bandwidth.setup-checked", "1");
+  } catch {
+    // The check still runs when browser storage is blocked.
+  }
+  if (!checked) checkHASetup();
+}
+
 function homeAssistantDashboard() {
   const ingress = new URL("./", window.location.href);
   const page = (kind, card, title, aspectRatio) => {
