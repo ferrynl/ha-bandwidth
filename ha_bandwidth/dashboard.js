@@ -1,4 +1,4 @@
-"use strict";
+export function mountDashboard(document, fetch, pageUrl, shared) {
 
 const locales = {nl: "nl-NL", en: "en-GB", es: "es-ES", de: "de-DE"};
 const translationColumn = {en: 0, es: 1, de: 2};
@@ -172,7 +172,6 @@ const translations = new Map([
 
 const languageSelect = document.getElementById("dashboard-language");
 const languageKey = "ha-bandwidth.language";
-const pageUrl = new URL(window.location.href);
 const requestedLanguage = pageUrl.searchParams.get("lang");
 let savedLanguage;
 try {
@@ -204,7 +203,7 @@ for (const element of document.querySelectorAll("main [aria-label], main [placeh
 languageSelect.addEventListener("change", () => {
   try {
     window.localStorage.setItem(languageKey, languageSelect.value);
-    if (!pageUrl.searchParams.has("lang")) {
+    if (shared || !pageUrl.searchParams.has("lang")) {
       window.location.reload();
       return;
     }
@@ -513,7 +512,7 @@ function table(rows) {
       source = row.source;
       sourceLabel = row.label;
       focusDestinations = kind === "app";
-      load();
+      refresh();
     });
     tr.dataset.search = row.source;
     const cell = tr.insertCell();
@@ -768,7 +767,7 @@ function showTopology(data) {
     button.onclick = row ? () => {
       source = id;
       sourceLabel = row.label;
-      load();
+      refresh();
       el("chart-title").scrollIntoView({block: "nearest"});
     } : null;
   }
@@ -1026,7 +1025,7 @@ for (const [key, change] of [
     button.addEventListener("click", () => {
       change(button.dataset[key]);
       for (const item of buttons) item.setAttribute("aria-pressed", String(item === button));
-      load();
+      refresh();
     });
   }
 }
@@ -1096,7 +1095,7 @@ async function checkHASetup(showAlways = false) {
 
 el("check-ha-setup").addEventListener("click", () => checkHASetup(true));
 el("retry-ha-setup").addEventListener("click", () => checkHASetup(true));
-if (!embeddedCards.has(embeddedCard)) {
+if (!shared && !embeddedCard) {
   let checked = false;
   try {
     checked = sessionStorage.getItem("ha-bandwidth.setup-checked") === "1";
@@ -1128,9 +1127,31 @@ el("download-ha-dashboard").addEventListener("click", async event => {
   }
 });
 
-el("date").addEventListener("change", load);
-el("today").addEventListener("click", () => { el("date").value = ""; load(); });
-el("clear").addEventListener("click", () => { source = ""; sourceLabel = ""; load(); });
-load();
-setInterval(load, 30000);
+el("date").addEventListener("change", refresh);
+el("today").addEventListener("click", () => { el("date").value = ""; refresh(); });
+el("clear").addEventListener("click", () => { source = ""; sourceLabel = ""; refresh(); });
+function refresh() {
+  if (shared) shared.update({period, source, sourceLabel, date: el("date").value});
+  else load();
+}
+
+const unsubscribe = shared?.subscribe(state => {
+  ({period, source, sourceLabel} = state);
+  el("date").value = state.date;
+  for (const button of document.querySelectorAll("[data-period]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.period === period));
+  }
+  load();
+});
+if (!shared) load();
+const timer = setInterval(load, 30000);
+return () => {
+  clearInterval(timer);
+  unsubscribe?.();
+};
+}
+
+if (document.querySelector("main #download-ha-dashboard")) {
+  mountDashboard(document, window.fetch.bind(window), new URL(window.location.href));
+}
 

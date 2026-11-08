@@ -616,6 +616,7 @@ class Dashboard(BaseHTTPRequestHandler):
         assets = {
             "/": ("dashboard.html", "text/html; charset=utf-8"),
             "/lovelace.json": ("lovelace.json", "application/json"),
+            "/lovelace-card.js": ("lovelace-card.js", "text/javascript; charset=utf-8"),
             "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
             "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
         }

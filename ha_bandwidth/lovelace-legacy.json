@@ -1,0 +1,656 @@
+{
+  "title": "HA-Bandwidth",
+  "views": [
+    {
+      "title": "Overzicht",
+      "path": "overzicht",
+      "type": "panel",
+      "cards": [
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/",
+          "hide_background": true
+        }
+      ]
+    },
+    {
+      "title": "Server",
+      "path": "host",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "entities",
+          "title": "Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_host_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_host_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_host_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_host_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "history-graph",
+          "title": "Vandaag · verloop in Home Assistant",
+          "hours_to_show": 24,
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_host_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_host_day_tx",
+              "name": "Upload"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=host&card=history",
+          "title": "Verkeersgrafiek met periodekeuze",
+          "aspect_ratio": "95%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=host&card=ranking",
+          "title": "Netwerkinterfaces",
+          "aspect_ratio": "100%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=host&card=destinations",
+          "title": "Bronnen en bestemmingen",
+          "aspect_ratio": "125%"
+        }
+      ]
+    },
+    {
+      "title": "Apps",
+      "path": "app",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "entities",
+          "title": "Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_app_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_app_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_app_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_app_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "history-graph",
+          "title": "Vandaag · verloop in Home Assistant",
+          "hours_to_show": 24,
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_app_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_app_day_tx",
+              "name": "Upload"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=app&card=history",
+          "title": "Verkeersgrafiek met periodekeuze",
+          "aspect_ratio": "95%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=app&card=ranking",
+          "title": "Apps en containers",
+          "aspect_ratio": "135%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=app&card=app-details",
+          "title": "App-details en bestemmingen",
+          "aspect_ratio": "140%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=app&card=shared",
+          "title": "Gedeeld netwerk",
+          "aspect_ratio": "55%"
+        }
+      ]
+    },
+    {
+      "title": "IP-adressen",
+      "path": "peer",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "entities",
+          "title": "Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_peer_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_peer_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_peer_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_peer_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "history-graph",
+          "title": "Vandaag · verloop in Home Assistant",
+          "hours_to_show": 24,
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_peer_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_peer_day_tx",
+              "name": "Upload"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=peer&card=history",
+          "title": "Verkeersgrafiek met periodekeuze",
+          "aspect_ratio": "95%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=peer&card=ranking",
+          "title": "IP-adressen",
+          "aspect_ratio": "135%"
+        }
+      ]
+    },
+    {
+      "title": "Apparaten",
+      "path": "device",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "entities",
+          "title": "Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_device_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_device_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_device_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_device_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "history-graph",
+          "title": "Vandaag · verloop in Home Assistant",
+          "hours_to_show": 24,
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_device_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_device_day_tx",
+              "name": "Upload"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=device&card=history",
+          "title": "Verkeersgrafiek met periodekeuze",
+          "aspect_ratio": "95%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=device&card=topology",
+          "title": "Netwerkdiagram",
+          "aspect_ratio": "150%"
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=device&card=ranking",
+          "title": "Apparaten",
+          "aspect_ratio": "135%"
+        }
+      ]
+    },
+    {
+      "title": "OpenWrt en modem",
+      "path": "compare",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "entities",
+          "title": "Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "history-graph",
+          "title": "Vandaag · verloop in Home Assistant",
+          "hours_to_show": 24,
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_openwrt_day_tx",
+              "name": "Upload"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=compare&card=history",
+          "title": "Verkeersgrafiek met periodekeuze",
+          "aspect_ratio": "95%"
+        },
+        {
+          "type": "entities",
+          "title": "Modem · Vandaag",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_modem_day_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_day_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_day_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Modem · Deze week",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_modem_week_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_week_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_week_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Modem · Deze maand",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_modem_month_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_month_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_month_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Modem · Dit jaar",
+          "entities": [
+            {
+              "entity": "sensor.ha_bandwidth_modem_year_rx",
+              "name": "Download"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_year_tx",
+              "name": "Upload"
+            },
+            {
+              "entity": "sensor.ha_bandwidth_modem_year_total",
+              "name": "Totaal"
+            }
+          ]
+        },
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=compare&card=comparison",
+          "title": "Server, OpenWrt en modem",
+          "aspect_ratio": "100%"
+        }
+      ]
+    },
+    {
+      "title": "Back-up",
+      "path": "backup",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "iframe",
+          "url": "__HA_BANDWIDTH_INGRESS__/?kind=backup&card=backup",
+          "title": "Back-upbeheer",
+          "aspect_ratio": "170%"
+        }
+      ]
+    }
+  ]
+}
