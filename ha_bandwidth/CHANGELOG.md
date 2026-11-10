@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.16
+
+- Herstel opstartfout: kopieer `live_monitor.py` naar de app-container zodat de realtime monitor kan laden.
+- Voeg CI-controle toe die ontbrekende lokale Python-modules in de Dockerfile detecteert.
+
 ## 0.10.15
 
 - Live snelheidsoverzicht per WAN-bron, apps en apparaten op basis van de bestaande tellerinterval.
