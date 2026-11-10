@@ -111,3 +111,15 @@ body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{di
 #ha-setup-dialog li{margin-block:.75rem}
 #ha-setup-dialog li p{margin:.25rem 0}
 #ha-setup-dialog form{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* Responsive near-realtime panel, shared by ingress and embedded dashboard. */
+.live-panel { margin-block: 1rem; }
+.live-panel .section-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.65rem; }
+.live-panel #live-freshness { font-size:.9rem; opacity:.8; }
+.live-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:1rem 0; }
+.live-summary > div { background:rgba(110,140,180,.10); border-radius:12px; padding:1rem; min-width:0; }
+.live-summary strong { display:block; font-size:clamp(1.15rem,3vw,1.8rem); overflow-wrap:anywhere; }
+.live-summary small { display:block; margin-bottom:.4rem; }
+.live-panel h3 { margin-top:1.2rem; }
+.live-alert { padding:.6rem .8rem; border-left:3px solid #e7ab47; margin:.5rem 0; background:rgba(231,171,71,.08); border-radius:4px; }
+@media(max-width:460px){ .live-summary { gap:.5rem; } .live-summary > div {padding:.65rem;} }
