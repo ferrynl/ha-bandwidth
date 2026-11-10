@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
+from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
@@ -32,6 +33,7 @@ from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("BANDWIDTH_DATA", "/data"))
 INTERVAL = 30
+LIVE = LiveMonitor()
 OPTIONS = DATA / "options.json"
 SETTINGS = json.loads(OPTIONS.read_text(encoding="utf-8")) if OPTIONS.exists() else {}
 ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
@@ -347,6 +349,7 @@ def collect():
                 totals[0] += rx
                 totals[1] += tx
             rows.extend(("peer", peer, peer, *totals) for peer, totals in peer_totals.items())
+            LIVE.update(rows, now)
             try:
                 record(now, rows, now.date() != last_day, destinations + host_destinations)
                 last_day = now.date()
@@ -582,6 +585,9 @@ class Dashboard(BaseHTTPRequestHandler):
                 self.send_json_error(500, "IPinfo kon niet worden opgeslagen of gelezen.")
                 return
             self.reply(json.dumps(data).encode(), "application/json")
+            return
+        if url.path == "/api/live":
+            self.reply(json.dumps(LIVE.snapshot()).encode(), "application/json")
             return
         if url.path == "/api/ha-setup":
             status = setup_status(SETTINGS.get("publish_to_ha", True))
