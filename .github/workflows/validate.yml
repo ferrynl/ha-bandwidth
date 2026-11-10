@@ -18,6 +18,22 @@ jobs:
           node-version: '22'
       - name: Compile Python files
         run: python -m compileall -q ha_bandwidth
+      - name: Check runtime modules are present in the Docker image
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          root = Path("ha_bandwidth")
+          dockerfile = (root / "Dockerfile").read_text()
+          copy = " ".join(line for line in dockerfile.splitlines() if line.startswith("COPY "))
+          module = ast.parse((root / "monitor.py").read_text())
+          required = {imp.name for item in module.body if isinstance(item, ast.ImportFrom)
+                      for imp in [item] if (root / (imp.name + ".py")).exists()}
+          missing = sorted(name for name in required if name + ".py" not in copy)
+          if missing:
+              raise SystemExit("Missing runtime Python modules in Docker COPY: " + ", ".join(missing))
+          print("Docker runtime modules present:", ", ".join(sorted(required)))
+          PY
       - name: Run unit tests
         run: python -m unittest discover -s ha_bandwidth -p 'test_*.py' -v
       - name: Check JavaScript module syntax
