@@ -2,13 +2,14 @@ import {mountDashboard} from "./dashboard.js";
 
 const base = new URL("./", import.meta.url);
 const sections = {
-  overview: "Volledig dashboard", controls: "Kop en periodekeuze", totals: "Totalen",
+  overview: "Volledig dashboard", live: "Realtime verkeer en afwijkingen", controls: "Kop en periodekeuze", totals: "Totalen",
   history: "Verkeersgrafiek", ranking: "Verkeerstabel", destinations: "Bestemmingen",
   shared: "Gedeeld netwerk", topology: "Netwerkdiagram", comparison: "Vergelijking", backup: "Back-up",
 };
 const kinds = {host: "Server", app: "Apps", peer: "IP-adressen", device: "Apparaten", compare: "OpenWrt en modem", backup: "Back-up"};
 const groups = new Map();
 const selected = {
+  live: ["#live-panel"],
   controls: ["header", "#explanation", "#warnings", ".controls", "#range"],
   totals: ["#totals"],
   history: [".history"],

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.15
+
+- Live snelheidsoverzicht per WAN-bron, apps en apparaten op basis van de bestaande tellerinterval.
+- Top 10 actuele app- en apparaatverbruikers, afzonderlijk van overlappende WAN-totalen.
+- Waarschuwingssignalen bij grote verkeerspieken met lokale baseline en waarschuwing-cooldown.
+- Duidelijker onderscheid tussen gemeten OpenWrt-aansluitingen en logisch getekende verbindingen.
+- Losse, herbruikbare Lovelace-kaart voor live verkeer en waarschuwingen.
+
 ## 0.10.14
 
 - Alle Lovelace-kaarten gebruiken de beschikbare kaartbreedte. Op smalle kaarten passen de bediening, totalen, grafiek en netwerkkaart zich aan.

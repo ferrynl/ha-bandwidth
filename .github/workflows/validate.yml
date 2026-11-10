@@ -1,0 +1,24 @@
+name: Validate HA-Bandwidth
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python files
+        run: python -m compileall -q ha_bandwidth
+      - name: Run unit tests
+        run: python -m unittest discover -s ha_bandwidth -p 'test_*.py' -v
+      - name: Check JavaScript module syntax
+        run: node --input-type=module --check < ha_bandwidth/dashboard.js
