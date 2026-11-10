@@ -74,3 +74,12 @@ De app gebruikt de Docker-socket uitsluitend voor leesverzoeken. Toegang tot de 
 Voor handmatige installatie, open HA-Bandwidth via zijn Home Assistant-zijbalk en klik op **Home Assistant-dashboard downloaden**. Maak een leeg dashboard via **Instellingen → Dashboards**, open de ruwe configuratie-editor en plak de inhoud van het gedownloade YAML-bestand. Je kunt elke kaart daarna verplaatsen, aanpassen of kopiëren naar een ander dashboard. Als je entiteiten eerder hebt hernoemd, pas je hun ID's aan in de kaarten.
 
 De totalen gebruiken gewone Home Assistant-entiteitskaarten. Grafieken, tabellen, de netwerkkaart en back-upbeheer zijn aparte webpagina-kaarten die de interactieve onderdelen van HA-Bandwidth via Ingress laden. Voor deze kaarten heb je toegang tot de app nodig. Open de app vanuit de zijbalk als je Ingress-sessie verlopen is. Bewaar het dashboard binnen je eigen Home Assistant-installatie.
+
+
+## Live monitoring, afwijkingen en netwerkkaart (0.10.15)
+
+De kaart **Live netwerkverkeer** geeft de gemiddelde snelheid over de laatste collection interval (momenteel 30 seconden) en vernieuwt de weergave iedere vijf seconden. Zonder OpenWrt WAN-tellers wordt indien beschikbaar de modembron gebruikt; zonder WAN-bron staan de WAN-snelheden op onbekend. De top 10 toont apparaten en apps apart van de WAN-totalen, omdat deze meetdomeinen overlappen.
+
+Afwijkingen worden pas na acht vorige metingen per bron beoordeeld. Een waarschuwing vereist minstens 5 Mbit/s gecombineerd verkeer en meer dan viermaal de mediaan van recente metingen. De waarschuwingen worden maximaal vijftien minuten onderdrukt per bron en blijven uitsluitend in het geheugen, zodat een herstart ze wist. Een waarschuwing bewijst geen onveilig verkeer.
+
+De netwerkkaart onderscheidt de door OpenWrt gerapporteerde aansluiting van logisch getekende verbindingen. Een getekende route mag niet als fysieke poortdetectie worden geïnterpreteerd. De kaart hergebruikt bestaande apparaatgegevens en behoudt zijn zoompositie bij live polls.
