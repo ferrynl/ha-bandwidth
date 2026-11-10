@@ -731,11 +731,11 @@ function showTopology(data) {
   const groups = new Map();
   for (const device of devices.values()) {
     if (search && ![device.name, device.source, device.ssid, device.connection, device.port, ...device.ips].join(" ").toLocaleLowerCase(locale).includes(search)) continue;
-    const name = device.connection || t("Aansluiting niet gemeten");
+    const name = device.connection ? device.connection + " (OpenWrt)" : t("Aansluiting niet gemeten");
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(device);
   }
-  el("topology-note").textContent = devices.size
+  el("topology-note").textContent = "Verbindingen zonder gemeten aansluiting zijn logisch weergegeven, niet fysiek bevestigd. · " + devices.size
     ? devices.size + t(" apparaten · Sleep een knooppunt of de achtergrond. Zoom met het muiswiel of twee vingers.")
     : t("Nog geen apparaten beschikbaar.");
   el("topology-cloud").hidden = !devices.size;
@@ -1144,9 +1144,73 @@ const unsubscribe = shared?.subscribe(state => {
   load();
 });
 if (!shared) load();
+
+// Independent polling avoids redrawing the topology and losing camera position.
+function bitRate(value) {
+  if (!Number.isFinite(value) || value < 0) return "—";
+  return value >= 1e9 ? (value / 1e9).toFixed(2) + " Gbit/s"
+       : value >= 1e6 ? (value / 1e6).toFixed(2) + " Mbit/s"
+       : value >= 1e3 ? (value / 1e3).toFixed(1) + " kbit/s" : value + " bit/s";
+}
+let liveBusy = false;
+async function loadLive() {
+  if (liveBusy) return;
+  liveBusy = true;
+  try {
+    const response = await fetch("./api/live");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    const age = data.updated ? Math.max(0, (Date.now() - Date.parse(data.updated)) / 1000) : Infinity;
+    el("live-freshness").textContent = Number.isFinite(age)
+      ? (age > 90 ? "Verouderde meting · " : "Laatste meting · ") + Math.round(age) + " s geleden"
+      : "Wachten op tweede meetronde";
+    const wan = (data.sources || []).find(s => s.kind === "openwrt")
+      || (data.sources || []).find(s => s.kind === "modem");
+    el("live-rx").textContent = wan ? bitRate(wan.rx_bps) : "—";
+    el("live-tx").textContent = wan ? bitRate(wan.tx_bps) : "—";
+    const leaders = (data.sources || []).filter(s => s.kind === "device" || s.kind === "app")
+      .sort((a,b) => (b.rx_bps+b.tx_bps)-(a.rx_bps+a.tx_bps)).slice(0,10);
+    const body = el("live-leaders");
+    body.replaceChildren();
+    for (const item of leaders) {
+      const tr = document.createElement("tr");
+      for (const value of [item.label || item.source, bitRate(item.rx_bps), bitRate(item.tx_bps)]) {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+    if (!leaders.length) {
+      const tr = document.createElement("tr"), td = document.createElement("td");
+      td.colSpan = 3;
+      td.textContent = "Nog geen apparaat- of appmetingen beschikbaar.";
+      tr.append(td);
+      body.append(tr);
+    }
+    const alerts = el("live-alerts");
+    alerts.replaceChildren();
+    const recent = (data.alerts || []).slice(0, 8);
+    if (!recent.length) alerts.textContent = "Nog geen afwijkingen vastgesteld (minimaal acht eerdere meetrondes nodig).";
+    for (const item of recent) {
+      const row = document.createElement("p");
+      row.className = "live-alert";
+      row.textContent = new Date(item.timestamp).toLocaleString(locale) + " · " +
+        (item.label || item.source) + ": " + bitRate(item.bps) +
+        " (normaal circa " + bitRate(item.baseline_bps) + ")";
+      alerts.append(row);
+    }
+  } catch (error) {
+    el("live-freshness").textContent = "Livestatus niet bereikbaar";
+  } finally { liveBusy = false; }
+}
+loadLive();
+const liveTimer = setInterval(loadLive, 5000);
+
 const timer = setInterval(load, 30000);
 return () => {
   clearInterval(timer);
+  clearInterval(liveTimer);
   unsubscribe?.();
 };
 }
