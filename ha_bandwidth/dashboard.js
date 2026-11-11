@@ -226,11 +226,16 @@ const views = {
 const monthFormat = new Intl.DateTimeFormat(locale, {month: "short", timeZone: "UTC"});
 const dateFormat = new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeZone: "UTC"});
 const months = Array.from({length: 12}, (_, index) => monthFormat.format(Date.UTC(2020, index, 1)));
-const embeddedCards = new Set(["history", "ranking", "destinations", "app-details", "shared", "topology", "comparison", "backup"]);
+const embeddedCards = new Set(["history", "ranking", "destinations", "app-details", "shared", "topology", "comparison", "backup", "live"]);
 const embeddedCard = pageUrl.searchParams.get("card");
 const embeddedKind = pageUrl.searchParams.get("kind");
 if (embeddedCards.has(embeddedCard)) document.body.dataset.dashboardCard = embeddedCard;
-let kind = Object.hasOwn(views, embeddedKind) || embeddedKind === "backup" ? embeddedKind : "host";
+let kind = embeddedCard === "live" ? "live" : embeddedKind;
+if (!Object.hasOwn(views, kind) && kind !== "backup" && kind !== "live") kind = "host";
+const livePanel = el("live-panel");
+for (const button of document.querySelectorAll("[data-kind]")) {
+  button.setAttribute("aria-pressed", String(button.dataset.kind === kind));
+}
 let period = "day";
 let source = "";
 let sourceLabel = "";
@@ -994,7 +999,15 @@ async function load() {
   const id = ++request;
   const backup = kind === "backup";
   el("backup-panel").hidden = !backup;
-  el("measurement-panel").hidden = backup;
+  const live = kind === "live";
+  const enteringLive = live && livePanel.hidden;
+  livePanel.hidden = !live;
+  el("measurement-panel").hidden = backup || live;
+  el("status").hidden = live;
+  if (live) {
+    if (enteringLive) loadLive();
+    return;
+  }
   if (backup) {
     await backupStatus();
     return;
@@ -1135,6 +1148,7 @@ function refresh() {
   else load();
 }
 
+let liveBusy = false;
 const unsubscribe = shared?.subscribe(state => {
   ({period, source, sourceLabel} = state);
   el("date").value = state.date;
@@ -1152,9 +1166,8 @@ function bitRate(value) {
        : value >= 1e6 ? (value / 1e6).toFixed(2) + " Mbit/s"
        : value >= 1e3 ? (value / 1e3).toFixed(1) + " kbit/s" : value + " bit/s";
 }
-let liveBusy = false;
 async function loadLive() {
-  if (liveBusy) return;
+  if (livePanel.hidden || liveBusy) return;
   liveBusy = true;
   try {
     const response = await fetch("./api/live");
@@ -1204,7 +1217,6 @@ async function loadLive() {
     el("live-freshness").textContent = "Livestatus niet bereikbaar";
   } finally { liveBusy = false; }
 }
-loadLive();
 const liveTimer = setInterval(loadLive, 5000);
 
 const timer = setInterval(load, 30000);

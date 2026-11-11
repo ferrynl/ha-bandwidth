@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.17
+
+- Verplaats live WAN-snelheden, de top 10 en verkeerspieken naar de aparte tab Live.
+- Voeg Live toe aan nieuwe en bestaande Home Assistant-dashboards van HA-Bandwidth. De losse Lovelace-kaart blijft beschikbaar.
+
 ## 0.10.16
 
 - Herstel opstartfout: kopieer `live_monitor.py` naar de app-container zodat de realtime monitor kan laden.

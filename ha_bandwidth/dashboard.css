@@ -123,3 +123,4 @@ body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{di
 .live-panel h3 { margin-top:1.2rem; }
 .live-alert { padding:.6rem .8rem; border-left:3px solid #e7ab47; margin:.5rem 0; background:rgba(231,171,71,.08); border-radius:4px; }
 @media(max-width:460px){ .live-summary { gap:.5rem; } .live-summary > div {padding:.65rem;} }
+.live-panel td:first-child { overflow-wrap:anywhere; }

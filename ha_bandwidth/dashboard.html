@@ -30,6 +30,7 @@
     <button type="button" data-kind="peer" aria-pressed="false">IP-adressen</button>
     <button type="button" data-kind="device" aria-pressed="false">Apparaten</button>
     <button type="button" data-kind="compare" aria-pressed="false">OpenWrt vergelijken</button>
+    <button type="button" data-kind="live" aria-pressed="false">Live</button>
     <button type="button" data-kind="backup" aria-pressed="false">Back-up</button>
   </nav>
   <section class="card" id="backup-panel" hidden>
@@ -45,6 +46,15 @@
     </form>
     <p id="backup-status" role="status"></p>
   </section>
+  <section class="card live-panel" id="live-panel" hidden aria-label="Live netwerkverkeer">
+    <div class="section-head"><h2>Live netwerkverkeer</h2><span id="live-freshness" role="status">Wachten op metingen…</span></div>
+    <p>Gemiddelde snelheid tijdens de laatste meetronde, geen seconde-tot-seconde packetmeting. Verschillende meetbronnen kunnen overlappen.</p>
+    <div class="live-summary"><div><small>WAN download</small><strong id="live-rx">—</strong></div><div><small>WAN upload</small><strong id="live-tx">—</strong></div></div>
+    <h3>Top 10 actieve apparaten en apps</h3>
+    <div class="table-scroll"><table><thead><tr><th>Bron</th><th>Download</th><th>Upload</th></tr></thead><tbody id="live-leaders"></tbody></table></div>
+    <h3>Mogelijke verkeerspieken</h3><p id="live-alert-note">Een waarschuwing is een statistische aanwijzing, geen bewijs van misbruik.</p>
+    <div id="live-alerts" role="status">Nog geen afwijkingen vastgesteld.</div>
+  </section>
   <div id="measurement-panel">
   <p id="explanation"></p>
   <div id="warnings" hidden></div>
@@ -57,15 +67,6 @@
     </nav>
     <label>Datum <input id="date" type="date"></label>
     <button type="button" id="today">Vandaag</button>
-  </section>
-  <section class="card live-panel" id="live-panel" aria-label="Live netwerkverkeer">
-    <div class="section-head"><h2>Live netwerkverkeer</h2><span id="live-freshness" role="status">Wachten op metingen…</span></div>
-    <p>Gemiddelde snelheid tijdens de laatste meetronde, geen seconde-tot-seconde packetmeting. Verschillende meetbronnen kunnen overlappen.</p>
-    <div class="live-summary"><div><small>WAN download</small><strong id="live-rx">—</strong></div><div><small>WAN upload</small><strong id="live-tx">—</strong></div></div>
-    <h3>Top 10 actieve apparaten en apps</h3>
-    <div class="table-scroll"><table><thead><tr><th>Bron</th><th>Download</th><th>Upload</th></tr></thead><tbody id="live-leaders"></tbody></table></div>
-    <h3>Mogelijke verkeerspieken</h3><p id="live-alert-note">Een waarschuwing is een statistische aanwijzing, geen bewijs van misbruik.</p>
-    <div id="live-alerts" role="status">Nog geen afwijkingen vastgesteld.</div>
   </section>
   <p id="range"></p>
   <div id="comparison" class="card" hidden>

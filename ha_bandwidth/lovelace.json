@@ -318,6 +318,18 @@
       ]
     },
     {
+      "title": "Live",
+      "path": "live",
+      "type": "panel",
+      "cards": [
+        {
+          "type": "custom:ha-bandwidth-card",
+          "part": "live",
+          "kind": "host"
+        }
+      ]
+    },
+    {
       "title": "Back-up",
       "path": "backup",
       "type": "sections",

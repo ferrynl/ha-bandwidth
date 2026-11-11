@@ -62,9 +62,12 @@ def create_dashboard(socket, config, ingress):
         replacements = {view["path"]: view for view in config["views"]}
         updated = [replacements[view["path"]] if view == legacy.get(view.get("path")) else view
                    for view in views]
+        migrated = updated != views
+        if not any(view.get("path") == "live" for view in updated):
+            updated.append(replacements["live"])
         if updated == views:
             return "existing"
-        if not any(view.get("path") == "overzicht" for view in updated):
+        if migrated and not any(view.get("path") == "overzicht" for view in updated):
             updated.insert(0, config["views"][0])
         ensure_card_resource()
         command("lovelace/config/save", url_path=path, config={**current, "views": updated})
