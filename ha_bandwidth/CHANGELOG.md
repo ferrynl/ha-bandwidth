@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.19
+
+- Bekijk per verkeerspiek het meetvenster en de grootste apps en apparaten.
+- Versnel historiequeries met database-indexen.
+- Controleer toegangsbeperkingen in de containercheck.
+
 ## 0.10.18
 
 - Toon de meetstatus en laatste uitlezing per bron op Live.
@@ -169,3 +175,4 @@
 
 - Eerste versie met upload- en downloadgrafieken voor serververkeer, apps en IP-adressen.
 - Dag-, week-, maand- en jaaroverzichten met lokale opslag in SQLite.
+

@@ -57,4 +57,32 @@ day = Path("/data/test-date").read_text()
 report = json.loads(get(f"/api/traffic?kind=host&period=day&date={day}"))
 assert any(b["rx"] == 123 and b["tx"] == 456 for b in report["buckets"]), report
 assert get("/api/backup").startswith(b"SQLite format 3\x00")
+
+from urllib.error import HTTPError
+from urllib.request import Request
+
+try:
+    urlopen(Request("http://172.30.32.3:63187/api/backup/restore", data=b""), timeout=2)
+except HTTPError as error:
+    assert error.code == 403
+else:
+    raise AssertionError("Restore accepted without the required request header")
+PY
+docker run --rm -i --network bandwidth-smoke --ip 172.30.32.4 bandwidth-smoke python - <<'PY'
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+base = "http://172.30.32.3:63187"
+for request in (
+    Request(base + "/api/live", headers={"X-Forwarded-For": "172.30.32.2"}),
+    Request(base + "/api/backup"),
+    Request(base + "/api/backup/restore", data=b"",
+            headers={"X-HA-Bandwidth-Restore": "1", "X-Forwarded-For": "172.30.32.2"}),
+):
+    try:
+        urlopen(request, timeout=2)
+    except HTTPError as error:
+        assert error.code == 403
+    else:
+        raise AssertionError("Direct access accepted outside ingress: " + request.full_url)
 PY
