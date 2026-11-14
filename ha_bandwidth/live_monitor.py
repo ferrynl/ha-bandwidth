@@ -26,6 +26,7 @@ class LiveMonitor:
         with self.lock:
             elapsed = None if self.last_monotonic is None else monotonic - self.last_monotonic
             self.last_monotonic = monotonic
+            previous_time = self.last_time
             self.last_time = timestamp.isoformat()
             valid_interval = elapsed is not None and 0 < elapsed <= 180
             measured = {row[0] for row in rows} if valid_interval else set()
@@ -48,6 +49,7 @@ class LiveMonitor:
                 item[1] += max(0, tx)
                 item[2] = label
             current = []
+            new_alerts = []
             for (kind, source), (rx, tx, label) in by_source.items():
                 row = {"kind": kind, "source": source, "label": label,
                        "rx_bps": round(rx * 8 / elapsed),
@@ -65,15 +67,23 @@ class LiveMonitor:
                         if not any(a["kind"] == kind and a["source"] == source
                                    and (timestamp - datetime.fromisoformat(a["timestamp"])).total_seconds() < 900
                                    for a in self.alerts):
-                            self.alerts.appendleft({
+                            new_alerts.append({
                                 "timestamp": timestamp.isoformat(), "kind": kind,
                                 "source": source, "label": label,
                                 "bps": total, "baseline_bps": round(median),
                                 "reason": "Traffic spike compared to recent samples",
                             })
                 history.append(total)
+            current.sort(key=lambda row: row["rx_bps"] + row["tx_bps"], reverse=True)
+            for alert in new_alerts:
+                alert["interval_start"] = previous_time
+                alert["leaders"] = {
+                    kind: [row for row in current if row["kind"] == kind][:5]
+                    for kind in ("app", "device")
+                }
+                self.alerts.appendleft(alert)
             self.samples.append({"timestamp": self.last_time, "elapsed_seconds": round(elapsed, 2),
-                                 "sources": sorted(current, key=lambda r: r["rx_bps"] + r["tx_bps"], reverse=True)})
+                                 "sources": current})
 
     def snapshot(self):
         with self.lock:

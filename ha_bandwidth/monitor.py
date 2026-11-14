@@ -113,6 +113,8 @@ def initialize():
                 ip TEXT PRIMARY KEY, asn TEXT NOT NULL, as_name TEXT NOT NULL, as_domain TEXT NOT NULL
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS app_destinations_day ON app_destinations(day);
+            CREATE INDEX IF NOT EXISTS traffic_kind_hour ON traffic(kind, hour);
+            CREATE INDEX IF NOT EXISTS traffic_kind_source_hour ON traffic(kind, source, hour);
         """)
 
 

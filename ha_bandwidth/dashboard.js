@@ -1166,6 +1166,7 @@ function bitRate(value) {
        : value >= 1e6 ? (value / 1e6).toFixed(2) + " Mbit/s"
        : value >= 1e3 ? (value / 1e3).toFixed(1) + " kbit/s" : value + " bit/s";
 }
+let renderedAlerts;
 async function loadLive() {
   if (livePanel.hidden || liveBusy) return;
   liveBusy = true;
@@ -1219,15 +1220,49 @@ async function loadLive() {
       body.append(tr);
     }
     const alerts = el("live-alerts");
-    alerts.replaceChildren();
     const recent = (data.alerts || []).slice(0, 8);
+    const alertKey = JSON.stringify(recent);
+    if (alertKey === renderedAlerts) return;
+    const openAlerts = new Set([...alerts.querySelectorAll("details[open]")].map(row => row.dataset.key));
+    renderedAlerts = alertKey;
+    alerts.replaceChildren();
     if (!recent.length) alerts.textContent = "Nog geen afwijkingen vastgesteld (minimaal acht eerdere meetrondes nodig).";
     for (const item of recent) {
-      const row = document.createElement("p");
+      const row = document.createElement("details");
       row.className = "live-alert";
-      row.textContent = new Date(item.timestamp).toLocaleString(locale) + " · " +
+      row.dataset.key = JSON.stringify([item.timestamp, item.kind, item.source]);
+      row.open = openAlerts.has(row.dataset.key);
+      const summary = document.createElement("summary");
+      summary.textContent = new Date(item.timestamp).toLocaleString(locale) + " · " +
         (item.label || item.source) + ": " + bitRate(item.bps) +
         " (normaal circa " + bitRate(item.baseline_bps) + ")";
+      row.append(summary);
+      if (item.interval_start) {
+        const interval = document.createElement("p");
+        interval.textContent = "Meetvenster: " + new Date(item.interval_start).toLocaleString(locale) +
+          " tot " + new Date(item.timestamp).toLocaleString(locale) +
+          ". Dit verkeer is tegelijk gemeten en kan overlappen.";
+        row.append(interval);
+      }
+      for (const [kind, title] of [["app", "Apps"], ["device", "Apparaten"]]) {
+        const heading = document.createElement("h4");
+        heading.textContent = title;
+        row.append(heading);
+        const list = document.createElement("ul");
+        const leaders = item.leaders?.[kind] || [];
+        if (!leaders.length) {
+          const entry = document.createElement("li");
+          entry.textContent = "Geen metingen in dit tijdvak.";
+          list.append(entry);
+        }
+        for (const leader of leaders) {
+          const entry = document.createElement("li");
+          entry.textContent = (leader.label || leader.source) + " · ↓ " +
+            bitRate(leader.rx_bps) + " · ↑ " + bitRate(leader.tx_bps);
+          list.append(entry);
+        }
+        row.append(list);
+      }
       alerts.append(row);
     }
   } catch (error) {

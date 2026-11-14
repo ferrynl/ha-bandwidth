@@ -31,6 +31,10 @@ class LiveMonitorTests(unittest.TestCase):
         live.update([("device", "one", "One", 30_000_000, 30_000_000)],
                     now + timedelta(seconds=300), 300)
         self.assertEqual(len(live.snapshot()["alerts"]), 1)
+        alert = live.snapshot()["alerts"][0]
+        self.assertEqual(alert["interval_start"], (now + timedelta(seconds=270)).isoformat())
+        self.assertEqual(alert["leaders"]["device"][0]["source"], "one")
+        self.assertEqual(alert["leaders"]["app"], [])
         live.update([("device", "one", "One", 30_000_000, 30_000_000)],
                     now + timedelta(seconds=330), 330)
         self.assertEqual(len(live.snapshot()["alerts"]), 1)
