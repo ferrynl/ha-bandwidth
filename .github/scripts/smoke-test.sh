@@ -68,7 +68,7 @@ except HTTPError as error:
 else:
     raise AssertionError("Restore accepted without the required request header")
 PY
-docker run --rm -i --network bandwidth-smoke bandwidth-smoke python - <<'PY'
+docker run --rm -i --network bandwidth-smoke --ip 172.30.32.4 bandwidth-smoke python - <<'PY'
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
