@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.10.18"
+version: "0.10.19"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -62,3 +62,4 @@ schema:
   openwrt_interface: str
   modem_download_entity: str
   modem_upload_entity: str
+
