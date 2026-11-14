@@ -1177,11 +1177,28 @@ async function loadLive() {
     el("live-freshness").textContent = Number.isFinite(age)
       ? (age > 90 ? "Verouderde meting · " : "Laatste meting · ") + Math.round(age) + " s geleden"
       : "Wachten op tweede meetronde";
-    const wan = (data.sources || []).find(s => s.kind === "openwrt")
-      || (data.sources || []).find(s => s.kind === "modem");
+    const sources = age <= 90 ? (data.sources || []) : [];
+    const wan = sources.find(s => s.kind === "openwrt")
+      || sources.find(s => s.kind === "modem");
+    const statusList = el("live-source-status");
+    statusList.replaceChildren();
+    const names = { host: "Server", app: "Docker-apps", device: "OpenWrt-apparaten",
+      openwrt: "OpenWrt WAN", modem: "Zyxel WAN" };
+    for (const [kind, status] of Object.entries(data.quality || {})) {
+      const row = document.createElement("li");
+      const lastRead = status.last_read ? new Date(status.last_read) : null;
+      const stale = lastRead && Date.now() - lastRead.getTime() > 90000;
+      const state = stale ? "Verouderd" : {
+        measured: "Actueel", baseline: "Wacht op volgende tellerstand", missing: "Geen meting"
+      }[status.state];
+      row.textContent = names[kind] + " · " + state +
+        (lastRead ? " · " + lastRead.toLocaleString(locale) : "") +
+        (wan?.kind === kind ? " · bron van de WAN-snelheid hierboven" : "");
+      statusList.append(row);
+    }
     el("live-rx").textContent = wan ? bitRate(wan.rx_bps) : "—";
     el("live-tx").textContent = wan ? bitRate(wan.tx_bps) : "—";
-    const leaders = (data.sources || []).filter(s => s.kind === "device" || s.kind === "app")
+    const leaders = sources.filter(s => s.kind === "device" || s.kind === "app")
       .sort((a,b) => (b.rx_bps+b.tx_bps)-(a.rx_bps+a.tx_bps)).slice(0,10);
     const body = el("live-leaders");
     body.replaceChildren();
@@ -1215,6 +1232,8 @@ async function loadLive() {
     }
   } catch (error) {
     el("live-freshness").textContent = "Livestatus niet bereikbaar";
+    for (const id of ["live-rx", "live-tx"]) el(id).textContent = "-";
+    for (const id of ["live-source-status", "live-leaders"]) el(id).replaceChildren();
   } finally { liveBusy = false; }
 }
 const liveTimer = setInterval(loadLive, 5000);

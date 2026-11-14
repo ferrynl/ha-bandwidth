@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.18
+
+- Toon de meetstatus en laatste uitlezing per bron op Live.
+- Voorkom dubbele tellerstanden en verouderde snelheden na uitval.
+- Valideer de gebouwde add-on en back-upherstel voor publicatie.
+
 ## 0.10.17
 
 - Verplaats live WAN-snelheden, de top 10 en verkeerspieken naar de aparte tab Live.

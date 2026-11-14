@@ -2,15 +2,15 @@ name: Synchroniseer centrale Home Assistant-appstore
 on:
   release:
     types: [published]
-  push:
+  workflow_run:
+    workflows: [Publiceer HA-Bandwidth-versie]
+    types: [completed]
     branches: [main]
-    paths:
-      - ha_bandwidth/config.yaml
-      - .github/workflows/sync-ha-apps.yml
   workflow_dispatch:
 permissions: {}
 jobs:
   sync:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Start synchronisatie in ferrynl/ha-apps

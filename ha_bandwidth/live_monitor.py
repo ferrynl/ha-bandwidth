@@ -17,15 +17,27 @@ class LiveMonitor:
         self.alerts = deque(maxlen=40)
         self.last_monotonic = None
         self.last_time = None
+        self.last_observed = {}
+        self.quality = {}
 
-    def update(self, rows, timestamp, monotonic=None):
+    def update(self, rows, timestamp, monotonic=None, *, observed=(), expected=()):
         """Consume deduplicated readings from a completed collection round."""
         monotonic = time.monotonic() if monotonic is None else monotonic
         with self.lock:
             elapsed = None if self.last_monotonic is None else monotonic - self.last_monotonic
             self.last_monotonic = monotonic
             self.last_time = timestamp.isoformat()
-            if elapsed is None or elapsed <= 0 or elapsed > 180:
+            valid_interval = elapsed is not None and 0 < elapsed <= 180
+            measured = {row[0] for row in rows} if valid_interval else set()
+            for kind in observed:
+                self.last_observed[kind] = self.last_time
+            self.quality = {
+                kind: {"state": "measured" if kind in measured else
+                       "baseline" if kind in observed else "missing",
+                       "last_read": self.last_observed.get(kind)}
+                for kind in sorted(expected)
+            }
+            if not valid_interval:
                 return
             by_source = defaultdict(lambda: [0, 0, ""])
             for kind, source, label, rx, tx in rows:
@@ -65,11 +77,15 @@ class LiveMonitor:
 
     def snapshot(self):
         with self.lock:
-            sample = self.samples[-1] if self.samples else None
+            sample = self.samples[-1] if self.samples and self.samples[-1]["timestamp"] == self.last_time else None
+            history = []
+            for entry in self.samples:
+                wan = next((row for row in entry["sources"] if row["kind"] == "openwrt"), None)
+                history.append({"timestamp": entry["timestamp"],
+                                "rx_bps": wan["rx_bps"] if wan else None,
+                                "tx_bps": wan["tx_bps"] if wan else None})
             return {"updated": self.last_time, "interval_seconds": sample["elapsed_seconds"] if sample else None,
                     "sources": sample["sources"] if sample else [],
-                    "history": [{"timestamp": s["timestamp"],
-                                 "rx_bps": sum(r["rx_bps"] for r in s["sources"] if r["kind"] == "openwrt"),
-                                 "tx_bps": sum(r["tx_bps"] for r in s["sources"] if r["kind"] == "openwrt")}
-                                for s in self.samples],
+                    "quality": self.quality,
+                    "history": history,
                     "alerts": list(self.alerts), "note": "Rates are averages over the previous collection interval. WAN, host, apps and devices overlap; do not add them together."}

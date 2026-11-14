@@ -198,13 +198,17 @@ def read_apps(pool, containers):
 
 def deltas(readings, previous):
     current = {}
-    rows = []
+    labels = {}
     for generation, kind, source, label, rx, tx in readings:
         key = (kind, source, generation)
         current[key] = (rx, tx)
+        labels[key] = label
+    rows = []
+    for key, (rx, tx) in current.items():
         old = previous.get(key)
         if old is not None and rx >= old[0] and tx >= old[1]:
-            rows.append((kind, source, label, rx - old[0], tx - old[1]))
+            kind, source, _ = key
+            rows.append((kind, source, labels[key], rx - old[0], tx - old[1]))
     return current, rows
 
 
@@ -241,7 +245,7 @@ def log_health(history, name, error="", success="verbinding en uitlezing werken"
 
 def collect():
     global STATUS, ROUTER_HOSTS, ROUTER_LINKS
-    previous, capture, last_day = {}, None, None
+    previous, capture, last_day, last_round = {}, None, None, None
     health = {}
     modem_phase = ""
     app_destinations = AppDestinations()
@@ -336,6 +340,9 @@ def collect():
                                f"{len(links)} LAN-, wifi- of mesh-aansluitingen gevonden")
             ROUTER_LINKS = links
             now = datetime.now(ZONE)
+            if last_round is not None and started - last_round > 180:
+                previous = {}
+            last_round = started
             current, rows = deltas(readings, previous)
             previous = current
             if capture:
@@ -349,7 +356,12 @@ def collect():
                 totals[0] += rx
                 totals[1] += tx
             rows.extend(("peer", peer, peer, *totals) for peer, totals in peer_totals.items())
-            LIVE.update(rows, now)
+            expected = {"host", "app"}
+            if openwrt:
+                expected.update(("openwrt", "device"))
+            if modem_configured:
+                expected.add("modem")
+            LIVE.update(rows, now, observed={key[0] for key in current}, expected=expected)
             try:
                 record(now, rows, now.date() != last_day, destinations + host_destinations)
                 last_day = now.date()
