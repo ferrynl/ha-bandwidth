@@ -14,6 +14,8 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from paho.mqtt import client as mqtt
 
+from openwrt import NoRedirect
+
 PERIODS = ("day", "week", "month", "year")
 SOURCES = {"host": "Server", "openwrt": "OpenWrt WAN", "modem": "Modem",
            "app": "Apps", "device": "Apparaten", "peer": "IP-adressen"}
@@ -85,7 +87,7 @@ def supervisor_get(path, timeout=4):
     request = Request("http://supervisor" + path, headers={
         "Authorization": "Bearer " + os.environ["SUPERVISOR_TOKEN"],
     })
-    with build_opener(ProxyHandler({})).open(request, timeout=timeout) as response:
+    with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=timeout) as response:
         return json.load(response)
 
 

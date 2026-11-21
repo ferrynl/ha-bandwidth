@@ -1,11 +1,19 @@
+import os
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from email.message import Message
+from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError
+from urllib.response import addinfourl
 
+import ha_dashboard
+import ha_mqtt
+import modem
 import monitor
 from storage_backup import restore, snapshot
 
@@ -65,3 +73,46 @@ class BackupTests(unittest.TestCase):
             for path, source in [(previous, "new"), (root / "export.sqlite3", "old")]:
                 with closing(sqlite3.connect(path)) as db:
                     self.assertEqual(db.execute("SELECT source FROM traffic").fetchone()[0], source)
+
+
+
+class SupervisorConnectionTests(unittest.TestCase):
+    def test_modem_reads_a_single_sensor_from_the_supervisor(self):
+        with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "test-token"}):
+            with patch.object(modem, "supervisor_get", return_value={
+                "state": "12", "attributes": {"unit_of_measurement": "B"},
+            }) as get:
+                self.assertEqual(modem.read_counter("sensor.wan_download"), 12)
+                get.assert_called_once_with("/core/api/states/sensor.wan_download")
+
+    def test_supervisor_http_redirect_is_rejected(self):
+        headers = Message()
+        headers["Location"] = "/core/api/config"
+        url = "http://supervisor/services/mqtt"
+        with addinfourl(BytesIO(), headers, url, 302) as redirect:
+            redirect.msg = "Found"
+            with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "test-token"}):
+                with patch("urllib.request.HTTPHandler.http_open", return_value=redirect) as open_http:
+                    with self.assertRaises(HTTPError) as raised:
+                        ha_mqtt.supervisor_get("/services/mqtt")
+                    self.assertEqual(raised.exception.code, 302)
+                    open_http.assert_called_once()
+                    request = open_http.call_args.args[0]
+                    self.assertEqual(request.full_url, url)
+                    self.assertEqual(request.get_header("Authorization"), "Bearer test-token")
+
+    def test_dashboard_keeps_websocket_credentials_on_the_supervisor(self):
+        websocket = Mock()
+        websocket.getstatus.return_value = 302
+        ingress = "/api/hassio_ingress/test"
+        with patch.object(ha_dashboard, "supervisor_get", return_value={"data": {"ingress_url": ingress}}):
+            with patch.object(ha_dashboard, "create_connection", return_value=websocket) as connect:
+                with patch.object(ha_dashboard.time, "sleep"):
+                    ha_dashboard.provision_dashboard()
+        self.assertEqual(connect.call_count, 3)
+        for call in connect.call_args_list:
+            self.assertEqual(call.args, ("ws://supervisor/core/websocket",))
+            self.assertEqual(call.kwargs["http_no_proxy"], ["supervisor"])
+            self.assertEqual(call.kwargs["redirect_limit"], 0)
+        websocket.send.assert_not_called()
+        websocket.close.assert_called()

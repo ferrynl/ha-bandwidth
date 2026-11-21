@@ -94,7 +94,13 @@ def provision_dashboard():
             app = supervisor_get("/addons/self/info")["data"]
             ingress = app["ingress_url"]
             config = dashboard_config(ingress)
-            socket = create_connection("ws://supervisor/core/websocket", timeout=8)
+            # The Supervisor exposes its API proxy on the internal add-on network.
+            socket = create_connection(
+                "ws://supervisor/core/websocket", timeout=8,
+                http_no_proxy=["supervisor"], redirect_limit=0,
+            )
+            if socket.getstatus() != 101:
+                raise RuntimeError("Home Assistant WebSocket-upgrade mislukt")
             greeting = json.loads(socket.recv())
             if greeting.get("type") != "auth_required":
                 raise RuntimeError("Home Assistant vroeg niet om WebSocket-authenticatie")

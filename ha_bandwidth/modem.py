@@ -1,12 +1,12 @@
 """Read cumulative WAN sensors from Home Assistant Core."""
 
-import json
 import os
 import re
 from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+
+from ha_mqtt import supervisor_get
 
 UNITS = {"B": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4,
          "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
@@ -37,20 +37,19 @@ def normalize_entity(value, field):
 
 
 def read_counter(entity):
-    token = os.environ.get("SUPERVISOR_TOKEN")
-    if not token:
+    if not ENTITY.fullmatch(entity):
+        raise ValueError("Vul een geldig Home Assistant sensor-ID in.")
+    if not os.environ.get("SUPERVISOR_TOKEN"):
         raise ValueError("De Home Assistant API is niet beschikbaar.")
-    request = Request(f"http://supervisor/core/api/states/{entity}", headers={"Authorization": f"Bearer {token}"})
     try:
-        with urlopen(request, timeout=4) as response:
-            state = json.load(response)
+        state = supervisor_get(f"/core/api/states/{entity}")
     except HTTPError as error:
         if error.code == 404:
             raise ValueError(f"Sensor {entity} bestaat niet in Home Assistant.") from None
         if error.code in (401, 403):
             raise ValueError(f"Home Assistant weigert toegang tot {entity} (HTTP {error.code}).") from None
         raise ValueError(f"Home Assistant kan {entity} niet uitlezen (HTTP {error.code}).") from None
-    except (URLError, TimeoutError):
+    except (URLError, TimeoutError, KeyError):
         raise ValueError(f"Home Assistant API is niet bereikbaar bij uitlezen van {entity}.") from None
     return counter_bytes(state, entity)
 
