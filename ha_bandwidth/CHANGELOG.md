@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.20
+
+- Volg geen redirects bij verzoeken aan de Home Assistant Supervisor.
+- Gebruik voor de interne dashboard-WebSocket geen proxy en controleer de WebSocket-upgrade voordat het token wordt verzonden.
+- Pin GitHub Actions op vaste commits.
+
 ## 0.10.19
 
 - Bekijk per verkeerspiek het meetvenster en de grootste apps en apparaten.
