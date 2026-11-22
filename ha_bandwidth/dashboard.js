@@ -31,6 +31,10 @@ const translations = new Map([
   ["Controleer of MQTT verbonden is met dezelfde broker en of MQTT Discovery aanstaat. Als je de sensoren hebt hernoemd, kijk dan bij het apparaat HA-Bandwidth.",["Check that MQTT is connected to the same broker and MQTT Discovery is enabled. If you renamed the sensors, check the HA-Bandwidth device.","Comprueba que MQTT esté conectado al mismo broker y que la detección MQTT esté activada. Si cambiaste el nombre de los sensores, consulta el dispositivo HA-Bandwidth.","Prüfe, ob MQTT mit demselben Broker verbunden und MQTT Discovery aktiviert ist. Wenn du Sensoren umbenannt hast, prüfe das Gerät HA-Bandwidth."]],
   ["Home Assistant of Supervisor gaf geen bruikbaar antwoord. Probeer het opnieuw zodra Home Assistant volledig is gestart.",["Home Assistant or Supervisor did not return a usable response. Try again after Home Assistant has started fully.","Home Assistant o Supervisor no devolvió una respuesta válida. Inténtalo de nuevo cuando Home Assistant haya iniciado por completo.","Home Assistant oder Supervisor lieferte keine verwertbare Antwort. Versuche es nach dem vollständigen Start von Home Assistant erneut."]],
   ["Home Assistant-dashboard downloaden",["Download Home Assistant dashboard","Descargar panel de Home Assistant","Home Assistant-Dashboard herunterladen"]],
+  ["Dashboard",["Dashboard","Panel","Dashboard"]],
+  ["Instellingen",["Settings","Configuración","Einstellungen"]],
+  ["Beheer de koppeling met Home Assistant en het dashboard.",["Manage the Home Assistant connection and dashboard.","Gestiona la conexión con Home Assistant y el panel.","Verwalte die Home-Assistant-Verbindung und das Dashboard."]],
+  ["Pagina",["Page","Página","Seite"]],
   ["Publiek IP",["Public IP","IP pública","Öffentliche IP"]],
   ["Lokaal / speciaal IP",["Local / special-use IP","IP local / de uso especial","Lokale IP / IP für besondere Zwecke"]],
   ["5G-modem via HA",["5G modem via HA","Módem 5G mediante HA","5G-Modem über HA"]],
@@ -232,6 +236,20 @@ languageSelect.addEventListener("change", () => {
 });
 
 const el = id => document.getElementById(id);
+const dashboardPage = el("dashboard-page");
+const settingsPage = el("settings-page");
+const dashboardLink = el("dashboard-link");
+const settingsLink = el("settings-link");
+function selectPage(settings) {
+  dashboardPage.hidden = settings;
+  settingsPage.hidden = !settings;
+  dashboardLink.toggleAttribute("aria-current", !settings);
+  settingsLink.toggleAttribute("aria-current", settings);
+  if (!settings) dashboardLink.setAttribute("aria-current", "page");
+  if (settings) settingsLink.setAttribute("aria-current", "page");
+}
+dashboardLink.addEventListener("click", () => selectPage(false));
+settingsLink.addEventListener("click", () => selectPage(true));
 const format = new Intl.NumberFormat(locale, {maximumFractionDigits: 2});
 const views = {
   device: [t("Internetverkeer per wifi- of bekabeld apparaat via OpenWrt Bandwidth Monitor. Klik op een apparaat om alleen het verkeer daarvan te bekijken."), t("Verkeer per apparaat")],

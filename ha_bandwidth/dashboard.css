@@ -2,7 +2,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:radial-gradient(ellipse at top,#182e4b,var(--bg) 65%);color:var(--text);font:16px/1.45 system-ui,sans-serif;min-height:100vh}
-main{max-width:1500px;margin:auto;padding:clamp(16px,4vw,52px)}
+main{width:100%;max-width:none;margin:auto;padding:clamp(12px,2.4vw,36px)}
 h1,h2,p{margin:0 0 .55em}
 h1{font-size:clamp(2rem,5vw,3.5rem);letter-spacing:-.05em}
 h2{font-size:1.1rem}
@@ -15,11 +15,13 @@ header{margin-bottom:1.4rem;display:flow-root}
 nav,.controls,.section-head{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
 .controls,.section-head{justify-content:space-between}
 .controls{margin:1rem 0}
+#dashboard-nav{margin-bottom:1rem}
+#dashboard-nav button{min-height:44px}
 button,input{font:inherit;color:var(--text);padding:.45em .75em;border:1px solid var(--line);background:#15243a;border-radius:9px}
 button{cursor:pointer}
-button:hover,button[aria-pressed=true]{background:#2b4667;border-color:var(--rx)}
+button:hover,button[aria-pressed=true],button[aria-current=page]{background:#2b4667;border-color:var(--rx)}
 :focus-visible{outline:2px solid var(--rx);outline-offset:3px}
-.totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.7rem}
 .card{background:linear-gradient(150deg,#20314d,#152237);border:1px solid var(--line);border-radius:19px;padding:clamp(11px,2vw,24px);box-shadow:0 10px 24px #08101a80,inset 0 1px #ffffff0d;margin-bottom:.9rem}
 .totals strong{font-size:clamp(.95rem,3.2vw,2.25rem);white-space:nowrap}
 .totals h2{font-size:clamp(.75rem,2vw,1.1rem);color:var(--muted)}
@@ -89,7 +91,7 @@ th:first-child,td:first-child{text-align:left}
 td button{max-width:min(40vw,450px);text-overflow:ellipsis;overflow:hidden}
 #warnings{border:1px solid #a98142;background:#382a20;color:#ffe4bc;padding:.65rem .9rem;border-radius:10px;margin:.7rem 0}
 nav + p{margin-top:.6rem}
-@media(max-width:480px){main{padding:12px}.totals{gap:.35rem}.totals .card{padding:9px}}
+@media(max-width:480px){.totals{gap:.35rem}.totals .card{padding:9px}}
 
 
 .cellular-rx{color:#ff8175}.cellular-tx{color:#edf4ff}
@@ -98,7 +100,9 @@ nav + p{margin-top:.6rem}
 .ha-dashboard-export{margin:.3rem 0 .8rem}
 body[data-dashboard-card] main{max-width:none;padding:.5rem}
 body[data-dashboard-card] header,
-body[data-dashboard-card] main > nav,
+body[data-dashboard-card] #dashboard-nav,
+body[data-dashboard-card] #dashboard-page > nav,
+body[data-dashboard-card] #settings-page,
 body[data-dashboard-card] #explanation,
 body[data-dashboard-card] #totals,
 body[data-dashboard-card]:not([data-dashboard-card="history"]) .history,
