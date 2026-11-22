@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.21
+
+- Toon de grafiek met verkeer direct onder de totalen. De tabel met bestemmingen staat nu onder de grafiek.
+- Scroll bij het kiezen van een app naar de grafiek in plaats van naar de bestemmingen.
+
 ## 0.10.20
 
 - Volg geen redirects bij verzoeken aan de Home Assistant Supervisor.

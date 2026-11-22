@@ -85,20 +85,6 @@
     <section class="card"><h2>Upload</h2><strong id="upload">—</strong></section>
     <section class="card"><h2>Totaal</h2><strong id="total">—</strong></section>
   </div>
-  <section class="card" id="destinations" hidden>
-    <h2 id="destinations-title" tabindex="-1">Bestemmingen</h2>
-    <p id="destinations-note" role="status"></p>
-    <div class="table-scroll" id="destinations-table" hidden>
-      <table>
-        <thead><tr>
-          <th scope="col">Domein / apparaat</th><th scope="col">IP-adres</th><th scope="col">Type adres</th>
-          <th scope="col">Protocol</th><th scope="col">Poort wederpartij</th>
-          <th scope="col">Download</th><th scope="col">Upload</th><th scope="col">Totaal</th>
-        </tr></thead>
-        <tbody id="destination-rows"></tbody>
-      </table>
-    </div>
-  </section>
   <section class="card" id="topology-panel" hidden>
     <h2>Netwerkdiagram</h2>
     <p id="topology-note"></p>
@@ -134,6 +120,20 @@
       <div id="chart" role="group" aria-label="Download boven de nullijn en upload eronder"></div>
     </div>
     <p id="chart-details" aria-hidden="true"></p>
+  </section>
+  <section class="card" id="destinations" hidden>
+    <h2 id="destinations-title" tabindex="-1">Bestemmingen</h2>
+    <p id="destinations-note" role="status"></p>
+    <div class="table-scroll" id="destinations-table" hidden>
+      <table>
+        <thead><tr>
+          <th scope="col">Domein / apparaat</th><th scope="col">IP-adres</th><th scope="col">Type adres</th>
+          <th scope="col">Protocol</th><th scope="col">Poort wederpartij</th>
+          <th scope="col">Download</th><th scope="col">Upload</th><th scope="col">Totaal</th>
+        </tr></thead>
+        <tbody id="destination-rows"></tbody>
+      </table>
+    </div>
   </section>
   <section class="card table-card" id="ranking-panel">
     <h2 id="ranking">Verkeer per netwerkinterface</h2>
