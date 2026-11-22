@@ -41,7 +41,7 @@ Open **Apparaten** in HA-Bandwidth. De tabel toont upload en download per appara
 
 ## Back-up
 
-Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen.
+Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen. De bewaarde verkeerspieken zitten wel in het gedownloade bestand, maar worden bij het terugzetten niet teruggezet.
 
 ## Bronnen en bestemmingen van de server
 
@@ -83,3 +83,66 @@ De kaart **Live netwerkverkeer** geeft de gemiddelde snelheid over de laatste co
 Afwijkingen worden pas na acht vorige metingen per bron beoordeeld. Een waarschuwing vereist minstens 5 Mbit/s gecombineerd verkeer en meer dan viermaal de mediaan van recente metingen. De waarschuwingen worden maximaal vijftien minuten onderdrukt per bron en blijven uitsluitend in het geheugen, zodat een herstart ze wist. Een waarschuwing bewijst geen onveilig verkeer.
 
 De netwerkkaart onderscheidt de door OpenWrt gerapporteerde aansluiting van logisch getekende verbindingen. Een getekende route mag niet als fysieke poortdetectie worden geïnterpreteerd. De kaart hergebruikt bestaande apparaatgegevens en behoudt zijn zoompositie bij live polls.
+
+## Totalen vergelijken met de vorige periode
+
+Onder download, upload en totaal staat het verschil met de vorige dag, week, maand of het vorige jaar. Loopt de gekozen periode nog, dan vergelijkt de app met hetzelfde moment in de vorige periode. Anders zou een halve dag altijd tegen een hele dag verliezen. De vergelijking verschijnt alleen als de vorige periode helemaal binnen de meetgeschiedenis valt en verkeer bevat. Bij een filter op één bron geldt de vergelijking voor die bron.
+
+## Databudget
+
+Stel onder **HA-Bandwidth → Configuratie** het budget in van je databundel. Zonder `data_budget_gb` (of met 0) is het budget uit.
+
+| Optie | Betekenis |
+| --- | --- |
+| `data_budget_gb` | Je bundel in decimale gigabytes (1 GB = 1.000.000.000 bytes), zoals providers rekenen. |
+| `data_budget_source` | De bron die meetelt: `modem` (standaard), `openwrt` of `host`. |
+| `data_budget_reset_day` | De dag van de maand waarop je cyclus begint, 1 tot en met 28. Een cyclus loopt van middernacht tot middernacht, in de ingestelde tijdzone. |
+| `data_budget_warn_percent` | Het percentage waarbij de waarschuwing aangaat, standaard 80. |
+
+Het dashboard toont boven de periodekeuze een voortgangsbalk met het verbruik (download plus upload van de gekozen bron), de einddatum van de cyclus en na een dag aan metingen een verwachting voor het einde van de cyclus. Die verwachting is lineair en dus alleen een indicatie. Alleen metingen sinds de installatie tellen mee: begin je midden in een cyclus, dan is het verbruik lager dan bij je provider.
+
+Met `publish_to_ha` aan maakt de app deze entiteiten bij het apparaat **HA-Bandwidth**:
+
+- `sensor.ha_bandwidth_budget_percent`, `sensor.ha_bandwidth_budget_used` en `sensor.ha_bandwidth_budget_remaining`. De eerste heeft als attributen onder meer de limiet, de cyclusdata en de verwachting.
+- `binary_sensor.ha_bandwidth_budget_warning` staat aan vanaf het ingestelde percentage en `binary_sensor.ha_bandwidth_budget_exceeded` zodra het budget op is.
+
+Voorbeeld van een melding:
+
+```yaml
+automation:
+  - alias: Databudget bijna op
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ha_bandwidth_budget_warning
+        to: "on"
+    actions:
+      - action: notify.notify
+        data:
+          message: "Databudget: {{ states('sensor.ha_bandwidth_budget_percent') }}% gebruikt."
+```
+
+## Verkeerspieken bewaren en melden
+
+Verkeerspieken (zie Live) worden vanaf deze versie in de database bewaard, 400 dagen lang. Ze blijven na een herstart van de app zichtbaar op **Live**, waar de laatste 20 staan, en een piek die vlak voor de herstart al was gemeld wordt niet opnieuw gemeld. Met `publish_to_ha` aan komen er twee entiteiten bij:
+
+- `binary_sensor.ha_bandwidth_spike_active` staat aan tot een kwartier na de laatste piek. De attributen noemen onder meer de bron, de snelheid in Mbit/s en de normale snelheid.
+- `sensor.ha_bandwidth_spikes_today` telt de pieken van vandaag.
+
+Voorbeeld van een melding met details:
+
+```yaml
+automation:
+  - alias: Verkeerspiek
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ha_bandwidth_spike_active
+        to: "on"
+    actions:
+      - action: notify.notify
+        data:
+          message: >-
+            Verkeerspiek bij {{ state_attr('binary_sensor.ha_bandwidth_spike_active', 'label') }}:
+            {{ state_attr('binary_sensor.ha_bandwidth_spike_active', 'mbit_s') }} Mbit/s.
+```
+
+Een piek is een statistische aanwijzing en geen bewijs van misbruik. De drempels zijn ongewijzigd.

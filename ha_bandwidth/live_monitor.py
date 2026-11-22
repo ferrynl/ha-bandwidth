@@ -20,8 +20,17 @@ class LiveMonitor:
         self.last_observed = {}
         self.quality = {}
 
+    def restore(self, alerts):
+        """Zet bewaarde waarschuwingen terug, nieuwste eerst, zodat ze een herstart overleven."""
+        with self.lock:
+            for alert in reversed(alerts):
+                self.alerts.appendleft(alert)
+
     def update(self, rows, timestamp, monotonic=None, *, observed=(), expected=()):
-        """Consume deduplicated readings from a completed collection round."""
+        """Consume deduplicated readings from a completed collection round.
+
+        Geeft de nieuwe waarschuwingen van deze ronde terug, zodat de aanroeper ze kan bewaren.
+        """
         monotonic = time.monotonic() if monotonic is None else monotonic
         with self.lock:
             elapsed = None if self.last_monotonic is None else monotonic - self.last_monotonic
@@ -39,7 +48,7 @@ class LiveMonitor:
                 for kind in sorted(expected)
             }
             if not valid_interval:
-                return
+                return []
             by_source = defaultdict(lambda: [0, 0, ""])
             for kind, source, label, rx, tx in rows:
                 if kind not in ("host", "app", "device", "openwrt", "modem"):
@@ -84,6 +93,7 @@ class LiveMonitor:
                 self.alerts.appendleft(alert)
             self.samples.append({"timestamp": self.last_time, "elapsed_seconds": round(elapsed, 2),
                                  "sources": current})
+            return list(new_alerts)
 
     def snapshot(self):
         with self.lock:
