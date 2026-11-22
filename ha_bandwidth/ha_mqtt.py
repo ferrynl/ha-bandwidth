@@ -83,6 +83,75 @@ def discovery(key, label, field):
     }
 
 
+SPIKE_ACTIVE_SECONDS = 900  # Gelijk aan de onderdrukking van dubbele waarschuwingen in live_monitor.
+
+
+def budget_entities(status):
+    """Entiteiten voor het databudget. Zonder budget (None) zijn er geen entiteiten."""
+    if not status:
+        return []
+    attributes = {
+        "limit": status["limit"], "used": status["used"], "remaining": status["remaining"],
+        "source": status["source_label"], "cycle_start": status["cycle_start"],
+        "cycle_end": status["cycle_end"], "days_left": status["days_left"],
+        "projected": status["projected"], "projected_percent": status["projected_percent"],
+        "warn_percent": status["warn_percent"],
+    }
+    size = {"device_class": "data_size", "unit_of_measurement": "B"}
+    return [
+        {"component": "sensor", "id": "budget_percent", "name": "Databudget · Gebruikt",
+         "state": status["percent"], "attributes": attributes,
+         "config": {"unit_of_measurement": "%", "icon": "mdi:gauge", "suggested_display_precision": 1}},
+        {"component": "sensor", "id": "budget_used", "name": "Databudget · Verbruik",
+         "state": status["used"], "config": size},
+        {"component": "sensor", "id": "budget_remaining", "name": "Databudget · Resterend",
+         "state": status["remaining"], "config": size},
+        {"component": "binary_sensor", "id": "budget_warning", "name": "Databudget · Drempel bereikt",
+         "state": "ON" if status["state"] in ("warning", "exceeded") else "OFF",
+         "config": {"device_class": "problem"}},
+        {"component": "binary_sensor", "id": "budget_exceeded", "name": "Databudget · Overschreden",
+         "state": "ON" if status["state"] == "exceeded" else "OFF",
+         "config": {"device_class": "problem"}},
+    ]
+
+
+def spike_entities(last, count_today, now):
+    """Entiteiten voor verkeerspieken: actief tot een kwartier na de laatste piek, plus een teller."""
+    attributes = {}
+    active = False
+    if last:
+        moment = datetime.fromisoformat(last["timestamp"])
+        active = 0 <= (now - moment).total_seconds() < SPIKE_ACTIVE_SECONDS
+        attributes = {
+            "timestamp": last["timestamp"], "kind": last["kind"], "source": last["source"],
+            "label": last.get("label") or last["source"],
+            "mbit_s": round(last["bps"] / 1e6, 1), "baseline_mbit_s": round(last["baseline_bps"] / 1e6, 1),
+        }
+    return [
+        {"component": "binary_sensor", "id": "spike_active", "name": "Verkeerspiek actief",
+         "state": "ON" if active else "OFF", "attributes": attributes,
+         "config": {"device_class": "problem"}},
+        {"component": "sensor", "id": "spikes_today", "name": "Verkeerspieken vandaag",
+         "state": count_today, "config": {"icon": "mdi:chart-bell-curve", "state_class": "measurement"}},
+    ]
+
+
+def entity_config(entity):
+    config = {
+        "unique_id": f"{PREFIX}_{entity['id']}",
+        "default_entity_id": f"{entity['component']}.{PREFIX}_{entity['id']}",
+        "name": entity["name"],
+        "device": {"identifiers": [PREFIX], "name": "HA-Bandwidth"},
+        "state_topic": f"{PREFIX}/{entity['id']}/state",
+        "expire_after": 240,
+        "availability_topic": f"{PREFIX}/availability",
+    }
+    if entity.get("attributes") is not None:
+        config["json_attributes_topic"] = f"{PREFIX}/{entity['id']}/attributes"
+    config.update(entity.get("config", {}))
+    return config
+
+
 def supervisor_get(path, timeout=4):
     request = Request("http://supervisor" + path, headers={
         "Authorization": "Bearer " + os.environ["SUPERVISOR_TOKEN"],
@@ -131,7 +200,7 @@ def send(client, topic, payload):
         raise RuntimeError("MQTT-publicatie niet bevestigd")
 
 
-def publish(database, zone, period_bounds, include_ips, registry_path):
+def publish(database, zone, period_bounds, include_ips, registry_path, extras=None):
     global LAST_PUBLISH
     registry = {}
     if registry_path.exists():
@@ -161,6 +230,7 @@ def publish(database, zone, period_bounds, include_ips, registry_path):
             if not connected.wait(10):
                 raise RuntimeError("MQTT-verbinding niet bevestigd")
             sent = {}
+            extra_topics = set()
             while client.is_connected():
                 today = datetime.now(zone).date()
                 starts = {period: period_bounds(today, period)[0].isoformat() for period in PERIODS}
@@ -176,6 +246,26 @@ def publish(database, zone, period_bounds, include_ips, registry_path):
                             send(client, topic, payload)
                         current[topic] = payload
                     send(client, f"{PREFIX}/traffic/{key}", json.dumps(state))
+                try:
+                    entities = extras() if extras else []
+                except (OSError, ValueError, KeyError, sqlite3.Error) as error:
+                    # Houd de vorige extra entiteiten staan in plaats van ze te laten verdwijnen.
+                    logging.warning("Home Assistant MQTT: extra entiteiten overgeslagen (%s)", type(error).__name__)
+                    entities = None
+                    current.update((topic, payload) for topic, payload in sent.items() if topic in extra_topics)
+                for entity in entities or []:
+                    topic = f"homeassistant/{entity['component']}/{PREFIX}/{entity['id']}/config"
+                    payload = json.dumps(entity_config(entity), ensure_ascii=False)
+                    if sent.get(topic) != payload:
+                        send(client, topic, payload)
+                    current[topic] = payload
+                    if entity.get("attributes") is not None:
+                        send(client, f"{PREFIX}/{entity['id']}/attributes",
+                             json.dumps(entity["attributes"], ensure_ascii=False))
+                    send(client, f"{PREFIX}/{entity['id']}/state", str(entity["state"]))
+                if entities is not None:
+                    extra_topics = {f"homeassistant/{entity['component']}/{PREFIX}/{entity['id']}/config"
+                                    for entity in entities}
                 for topic in registry.keys() - current.keys():
                     send(client, topic, "")
                 if registry.keys() != current.keys():

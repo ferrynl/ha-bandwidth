@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+- Databudget: stel een maandbundel in. Het dashboard toont de voortgang en een verwachting voor het einde van de cyclus. Home Assistant krijgt sensoren voor het percentage, het verbruik en het restant, en waarschuwingen bij de ingestelde drempel en bij overschrijding.
+- Verkeerspieken worden bewaard en blijven na een herstart zichtbaar op Live. Home Assistant krijgt een sensor die aan staat bij een recente piek en een teller voor vandaag.
+- Onder de totalen staat het verschil met de vorige dag, week, maand of het vorige jaar. Een lopende periode wordt vergeleken met hetzelfde moment in de vorige.
+
 ## 0.10.21
 
 - Toon de grafiek met verkeer direct onder de totalen. De tabel met bestemmingen staat nu onder de grafiek.

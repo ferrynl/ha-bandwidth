@@ -168,6 +168,23 @@ const translations = new Map([
   ["Publiek",["Public","Pública","Öffentlich"]],
   ["Onbekend",["Unknown","Desconocido","Unbekannt"]],
   ["Bekabeld",["Wired","Cableado","Kabelgebunden"]],
+  ["Databudget",["Data budget","Presupuesto de datos","Datenbudget"]],
+  ["Binnen budget",["Within budget","Dentro del presupuesto","Im Budget"]],
+  ["Bijna op",["Almost used up","Casi agotado","Fast aufgebraucht"]],
+  ["Budget overschreden",["Budget exceeded","Presupuesto superado","Budget überschritten"]],
+  ["{used} van {limit} gebruikt ({percent}%)",["{used} of {limit} used ({percent}%)","{used} de {limit} usados ({percent}%)","{used} von {limit} verbraucht ({percent}%)"]],
+  ["Cyclus {start} tot en met {end}",["Cycle {start} through {end}","Ciclo del {start} al {end}","Zeitraum {start} bis {end}"]],
+  ["Nieuwe cyclus morgen",["New cycle tomorrow","Nuevo ciclo mañana","Neuer Zeitraum morgen"]],
+  ["Nieuwe cyclus over {days} dagen",["New cycle in {days} days","Nuevo ciclo en {days} días","Neuer Zeitraum in {days} Tagen"]],
+  ["Verwachting einde cyclus: {projected} ({percent}%)",["Expected at end of cycle: {projected} ({percent}%)","Previsto al final del ciclo: {projected} ({percent}%)","Erwartet am Ende des Zeitraums: {projected} ({percent}%)"]],
+  ["Nog geen metingen van deze bron in deze cyclus. Controleer de bron onder Configuratie.",["No measurements from this source in this cycle yet. Check the source under Configuration.","Aún no hay mediciones de esta fuente en este ciclo. Comprueba la fuente en Configuración.","In diesem Zeitraum liegen noch keine Messwerte dieser Quelle vor. Prüfe die Quelle unter Konfiguration."]],
+  ["gisteren",["yesterday","ayer","gestern"]],
+  ["vorige week",["last week","la semana pasada","letzte Woche"]],
+  ["vorige maand",["last month","el mes pasado","letzten Monat"]],
+  ["vorig jaar",["last year","el año pasado","letztes Jahr"]],
+  ["{change} t.o.v. {period}",["{change} vs {period}","{change} frente a {period}","{change} gegenüber {period}"]],
+  ["Gelijk aan {period}",["Same as {period}","Igual que {period}","Wie {period}"]],
+  [" tot hetzelfde moment",[" up to the same time"," hasta el mismo momento"," bis zum gleichen Zeitpunkt"]],
 ]);
 
 const languageSelect = document.getElementById("dashboard-language");
@@ -854,6 +871,53 @@ function showTopology(data) {
   if (focused) nodes.find(node => node.id === focused)?.element.focus({preventScroll: true});
 }
 
+const previousPeriods = {day: "gisteren", week: "vorige week", month: "vorige maand", year: "vorig jaar"};
+const percentFormat = new Intl.NumberFormat(locale, {maximumFractionDigits: 0});
+
+function showDelta(id, current, before, previous) {
+  const target = el(id);
+  target.replaceChildren();
+  if (!previous?.comparable || !(before > 0)) return;
+  const label = t(previousPeriods[period]);
+  const percent = (current - before) / before * 100;
+  const suffix = previous.partial ? t(" tot hetzelfde moment") : "";
+  if (Math.abs(percent) < 1) {
+    target.textContent = t("Gelijk aan {period}", {period: label}) + suffix;
+    return;
+  }
+  const change = (percent > 0 ? "+" : "−") + percentFormat.format(Math.abs(percent)) + "%";
+  target.textContent = t("{change} t.o.v. {period}", {change, period: label}) + suffix;
+}
+
+const budgetStates = {ok: "Binnen budget", warning: "Bijna op", exceeded: "Budget overschreden"};
+
+async function loadBudget() {
+  const panel = el("budget");
+  try {
+    const response = await fetch("./api/budget");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (!data.enabled) throw new Error("uit");
+    panel.dataset.state = data.state;
+    el("budget-title").textContent = t("Databudget") + " · " + data.source_label;
+    el("budget-state").textContent = t(budgetStates[data.state]);
+    el("budget-progress").value = Math.min(100, data.percent);
+    el("budget-used").textContent = t("{used} van {limit} gebruikt ({percent}%)",
+      {used: bytes(data.used), limit: bytes(data.limit), percent: format.format(data.percent)});
+    const range = {start: dateFormat.format(new Date(data.cycle_start)), end: dateFormat.format(new Date(data.cycle_end))};
+    el("budget-cycle").textContent = t("Cyclus {start} tot en met {end}", range) + " · " +
+      (data.days_left === 1 ? t("Nieuwe cyclus morgen") : t("Nieuwe cyclus over {days} dagen", {days: data.days_left}));
+    el("budget-projection").textContent = !data.measured
+      ? t("Nog geen metingen van deze bron in deze cyclus. Controleer de bron onder Configuratie.")
+      : data.projected === null ? ""
+      : t("Verwachting einde cyclus: {projected} ({percent}%)",
+          {projected: bytes(data.projected), percent: format.format(data.projected_percent)});
+    panel.hidden = false;
+  } catch {
+    panel.hidden = true;
+  }
+}
+
 function show(data) {
   const status = data.status;
   el("status").textContent = status.updated
@@ -887,6 +951,10 @@ function show(data) {
   el("download").textContent = hasData ? bytes(rx) : "—";
   el("upload").textContent = hasData ? bytes(tx) : "—";
   el("total").textContent = hasData ? bytes(rx + tx) : "—";
+  const previous = comparing || !hasData ? null : data.previous;
+  showDelta("download-delta", rx, previous?.rx, previous);
+  showDelta("upload-delta", tx, previous?.tx, previous);
+  showDelta("total-delta", rx + tx, previous ? previous.rx + previous.tx : 0, previous);
   el("chart-title").textContent = sourceLabel || t("Verkeer over tijd");
   el("clear").hidden = !source;
   el("empty").hidden = hasData;
@@ -1013,6 +1081,7 @@ async function load() {
     await backupStatus();
     return;
   }
+  loadBudget();
   const params = new URLSearchParams({kind, period, source});
   if (el("date").value) params.set("date", el("date").value);
   el("explanation").textContent = views[kind][0];
@@ -1221,7 +1290,7 @@ async function loadLive() {
       body.append(tr);
     }
     const alerts = el("live-alerts");
-    const recent = (data.alerts || []).slice(0, 8);
+    const recent = (data.alerts || []).slice(0, 20);
     const alertKey = JSON.stringify(recent);
     if (alertKey === renderedAlerts) return;
     const openAlerts = new Set([...alerts.querySelectorAll("details[open]")].map(row => row.dataset.key));

@@ -59,6 +59,13 @@
   <div id="measurement-panel">
   <p id="explanation"></p>
   <div id="warnings" hidden></div>
+  <section class="card budget" id="budget" hidden aria-labelledby="budget-title">
+    <div class="section-head"><h2 id="budget-title">Databudget</h2><strong id="budget-state" role="status"></strong></div>
+    <progress id="budget-progress" max="100" value="0" aria-labelledby="budget-title"></progress>
+    <p id="budget-used"></p>
+    <p id="budget-cycle"></p>
+    <p id="budget-projection"></p>
+  </section>
   <section class="controls" aria-label="Periode kiezen">
     <nav aria-label="Periode">
       <button type="button" data-period="day" aria-pressed="true">Dag</button>
@@ -81,9 +88,9 @@
     </div>
   </div>
   <div class="totals" id="totals">
-    <section class="card"><h2>Download</h2><strong id="download">—</strong></section>
-    <section class="card"><h2>Upload</h2><strong id="upload">—</strong></section>
-    <section class="card"><h2>Totaal</h2><strong id="total">—</strong></section>
+    <section class="card"><h2>Download</h2><strong id="download">—</strong><small class="delta" id="download-delta"></small></section>
+    <section class="card"><h2>Upload</h2><strong id="upload">—</strong><small class="delta" id="upload-delta"></small></section>
+    <section class="card"><h2>Totaal</h2><strong id="total">—</strong><small class="delta" id="total-delta"></small></section>
   </div>
   <section class="card" id="topology-panel" hidden>
     <h2>Netwerkdiagram</h2>

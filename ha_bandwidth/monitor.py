@@ -22,12 +22,13 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
+from budget import cycle_bounds, settings as budget_settings, status as evaluate_budget
 from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
 from openwrt import NoRedirect, OpenWrt, hosts_by_ip
 from ha_dashboard import provision_dashboard
-from ha_mqtt import publish as publish_to_ha, setup_status
+from ha_mqtt import budget_entities, publish as publish_to_ha, setup_status, spike_entities
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
 
 ROOT = Path(__file__).resolve().parent
@@ -111,6 +112,12 @@ def initialize():
             ) WITHOUT ROWID;
             CREATE TABLE IF NOT EXISTS ipinfo_cache (
                 ip TEXT PRIMARY KEY, asn TEXT NOT NULL, as_name TEXT NOT NULL, as_domain TEXT NOT NULL
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS traffic_alerts (
+                timestamp TEXT NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '', bps INTEGER NOT NULL, baseline_bps INTEGER NOT NULL,
+                reason TEXT NOT NULL DEFAULT '', interval_start TEXT, leaders TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY (timestamp, kind, source)
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS app_destinations_day ON app_destinations(day);
             CREATE INDEX IF NOT EXISTS traffic_kind_hour ON traffic(kind, hour);
@@ -233,6 +240,73 @@ def record(now, rows, prune, destinations=()):
             cutoff = (now.date() - timedelta(days=399)).isoformat()
             db.execute("DELETE FROM traffic WHERE hour < ?", (cutoff,))
             db.execute("DELETE FROM app_destinations WHERE day < ?", (cutoff,))
+            db.execute("DELETE FROM traffic_alerts WHERE timestamp < ?", (cutoff,))
+
+
+def store_alerts(alerts):
+    """Bewaar nieuwe verkeerspieken, zodat ze een herstart van de app overleven."""
+    if not alerts:
+        return
+    with closing(database()) as db, db:
+        db.executemany("""
+            INSERT OR IGNORE INTO traffic_alerts
+                (timestamp, kind, source, label, bps, baseline_bps, reason, interval_start, leaders)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [(alert["timestamp"], alert["kind"], alert["source"], alert.get("label") or "",
+               alert["bps"], alert["baseline_bps"], alert.get("reason", ""),
+               alert.get("interval_start"), json.dumps(alert.get("leaders", {})))
+              for alert in alerts])
+
+
+def alert_from_row(row):
+    alert = dict(row)
+    try:
+        alert["leaders"] = json.loads(alert["leaders"])
+    except ValueError:
+        alert["leaders"] = {}
+    return alert
+
+
+def load_alerts(limit=40):
+    with closing(database()) as db:
+        rows = db.execute("SELECT * FROM traffic_alerts ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
+    return [alert_from_row(row) for row in rows]
+
+
+def alerts_today(now):
+    """Het aantal pieken van vandaag en de laatste piek (of None)."""
+    with closing(database()) as db:
+        count = db.execute("SELECT COUNT(*) FROM traffic_alerts WHERE timestamp >= ?",
+                           (now.date().isoformat(),)).fetchone()[0]
+        last = db.execute("SELECT * FROM traffic_alerts ORDER BY timestamp DESC LIMIT 1").fetchone()
+    return count, alert_from_row(last) if last else None
+
+
+BUDGET_LABELS = {"openwrt": "OpenWrt WAN", "host": "Server"}
+
+
+def budget_status(now=None):
+    """Het huidige databudget, of None als het budget is uitgeschakeld."""
+    config = budget_settings(SETTINGS)
+    if config is None:
+        return None
+    now = now or datetime.now(ZONE)
+    start, end = cycle_bounds(now.date(), config["reset_day"])
+    with closing(database()) as db:
+        used, rows = db.execute(
+            "SELECT COALESCE(SUM(rx + tx), 0), COUNT(*) FROM traffic WHERE kind = ? AND hour >= ? AND hour < ?",
+            (config["source"], start.isoformat(), end.isoformat())).fetchone()
+    result = evaluate_budget(config, used, now, measured=rows > 0)
+    result["source_label"] = (SETTINGS.get("upstream_modem_name", "").strip() or "Modem") \
+        if config["source"] == "modem" else BUDGET_LABELS[config["source"]]
+    return result
+
+
+def home_assistant_entities():
+    """Extra entiteiten voor Home Assistant: databudget en verkeerspieken."""
+    now = datetime.now(ZONE)
+    count, last = alerts_today(now)
+    return budget_entities(budget_status(now)) + spike_entities(last, count, now)
 
 
 def log_health(history, name, error="", success="verbinding en uitlezing werken"):
@@ -363,7 +437,11 @@ def collect():
                 expected.update(("openwrt", "device"))
             if modem_configured:
                 expected.add("modem")
-            LIVE.update(rows, now, observed={key[0] for key in current}, expected=expected)
+            new_alerts = LIVE.update(rows, now, observed={key[0] for key in current}, expected=expected)
+            try:
+                store_alerts(new_alerts)
+            except sqlite3.Error:
+                logging.exception("Verkeerspiek kon niet worden bewaard")
             try:
                 record(now, rows, now.date() != last_day, destinations + host_destinations)
                 last_day = now.date()
@@ -413,6 +491,41 @@ def period_bounds(day, period):
     return day.replace(month=1, day=1), date(day.year + 1, 1, 1)
 
 
+def previous_period(day, period, now):
+    """Bepaal de vorige periode. Loopt de gekozen periode nog, dan stopt de vorige op hetzelfde moment.
+
+    De uren zijn lokale klokuren, zoals in de tabel `traffic`. Een zomertijdwissel
+    verschuift de vergelijking hooguit een uur.
+    """
+    start, end = period_bounds(day, period)
+    before_start, before_end = period_bounds(start - timedelta(days=1), period)
+    midnight = datetime.min.time()
+    first_hour = datetime.combine(before_start, midnight)
+    stop = datetime.combine(before_end, midnight)
+    partial = start <= now.date() < end
+    if partial:
+        this_hour = now.replace(tzinfo=None, minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        stop = min(stop, first_hour + (this_hour - datetime.combine(start, midnight)))
+    return before_start, before_end, first_hour, stop, partial
+
+
+def previous_totals(db, day, period, kind, source, now, first):
+    before_start, before_end, first_hour, stop, partial = previous_period(day, period, now)
+    sql = "SELECT COALESCE(SUM(rx), 0) AS rx, COALESCE(SUM(tx), 0) AS tx, COUNT(*) AS rows " \
+          "FROM traffic WHERE hour >= ? AND hour < ? AND kind = ?"
+    params = [first_hour.strftime("%Y-%m-%dT%H"), stop.strftime("%Y-%m-%dT%H"), kind]
+    if source:
+        sql += " AND source = ?"
+        params.append(source)
+    row = db.execute(sql, params).fetchone()
+    # De vorige periode is alleen vergelijkbaar als de metingen er helemaal in vielen.
+    comparable = bool(first) and first[:13] <= params[0] and row["rows"] > 0 and row["rx"] + row["tx"] > 0
+    return {
+        "start": before_start.isoformat(), "end": (before_end - timedelta(days=1)).isoformat(),
+        "rx": row["rx"], "tx": row["tx"], "partial": partial, "comparable": comparable,
+    }
+
+
 def router_topology(hosts, links, router_url):
     devices = {}
     try:
@@ -432,8 +545,9 @@ def router_topology(hosts, links, router_url):
     return [dict(device, source=key) for key, device in devices.items()]
 
 
-def report(day, period, kind, source):
+def report(day, period, kind, source, now=None):
     router_hosts = ROUTER_HOSTS
+    now = now or datetime.now(ZONE)
     start, end = period_bounds(day, period)
     bounds = (start.isoformat(), end.isoformat(), kind)
     if kind == "compare":
@@ -469,6 +583,7 @@ def report(day, period, kind, source):
             params += (source,)
         buckets = db.execute(sql + " GROUP BY bucket ORDER BY bucket", params).fetchall()
         first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
+        previous = previous_totals(db, day, period, kind, source, now, first)
         destinations, matching = [], []
         if kind == "host" or (kind == "app" and source):
             if kind == "host":
@@ -509,7 +624,7 @@ def report(day, period, kind, source):
         "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
         "rows": rows,
         "buckets": [dict(row) for row in buckets],
-        "status": STATUS, "first": first, "destinations": destinations,
+        "status": STATUS, "first": first, "previous": previous, "destinations": destinations,
         "destinations_truncated": len(matching) > 100,
         "upstream_modem": {
             "name": SETTINGS.get("upstream_modem_name", "").strip(),
@@ -599,6 +714,16 @@ class Dashboard(BaseHTTPRequestHandler):
                 self.send_json_error(500, "IPinfo kon niet worden opgeslagen of gelezen.")
                 return
             self.reply(json.dumps(data).encode(), "application/json")
+            return
+        if url.path == "/api/budget":
+            try:
+                status = budget_status()
+            except sqlite3.Error:
+                logging.exception("Databudget kon niet worden berekend")
+                self.send_json_error(500, "Het databudget kon niet worden berekend.")
+                return
+            payload = {"enabled": False} if status is None else dict(status, enabled=True)
+            self.reply(json.dumps(payload).encode(), "application/json")
             return
         if url.path == "/api/live":
             self.reply(json.dumps(LIVE.snapshot()).encode(), "application/json")
@@ -806,6 +931,10 @@ if __name__ == "__main__":
     except OSError:
         logging.warning("Kon de vorige appversie niet lezen of bijwerken")
     initialize()
+    try:
+        LIVE.restore(load_alerts())
+    except sqlite3.Error:
+        logging.exception("Bewaarde verkeerspieken konden niet worden gelezen")
     logging.info("HA-Bandwidth %s gestart op poort 63187", version)
     threading.Thread(target=backup_scheduler, daemon=True).start()
     threading.Thread(target=collect, daemon=True).start()
@@ -814,7 +943,8 @@ if __name__ == "__main__":
     if SETTINGS.get("publish_to_ha", True):
         threading.Thread(
             target=publish_to_ha,
-            args=(database, ZONE, period_bounds, SETTINGS.get("publish_ip_entities", False), DATA / "mqtt-sensors.json"),
+            args=(database, ZONE, period_bounds, SETTINGS.get("publish_ip_entities", False), DATA / "mqtt-sensors.json",
+                  home_assistant_entities),
             daemon=True,
         ).start()
     ThreadingHTTPServer(("0.0.0.0", 63187), Dashboard).serve_forever()
