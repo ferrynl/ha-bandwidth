@@ -518,6 +518,7 @@ function table(rows) {
       sourceLabel = row.label;
       focusDestinations = kind === "app";
       refresh();
+      if (kind === "app") el("chart-title").scrollIntoView({block: "nearest"});
     });
     tr.dataset.search = row.source;
     const cell = tr.insertCell();
@@ -580,7 +581,7 @@ function showDestinations(data) {
   updateTable("destination-rows");
   if (focusDestinations) {
     focusDestinations = false;
-    title.focus();
+    title.focus({preventScroll: true});
   }
 }
 
