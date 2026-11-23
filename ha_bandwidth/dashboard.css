@@ -144,3 +144,10 @@ body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{di
 .budget p{margin:0 0 .3em;font-size:.9rem}
 .budget p:empty{display:none}
 body[data-dashboard-card] #budget{display:none}
+
+/* Bewaartijd */
+#retention-form input[type=number]{display:block;width:8em;margin:.3em 0 .6em;padding:.45em .6em;color:var(--text);background:#0e1a2c;border:1px solid var(--line);border-radius:9px;font:inherit}
+#retention-form label{display:block}
+#retention-form p{margin:.4em 0;font-size:.9rem}
+#retention-form p:empty{display:none}
+#retention-form [aria-invalid=true]{border-color:#ff8175}

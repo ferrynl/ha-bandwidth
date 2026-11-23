@@ -56,6 +56,72 @@ def retention_days(options):
 
 
 RETENTION_DAYS = retention_days(SETTINGS)
+RETENTION_RANGE = (30, 3650)
+SETTINGS_LOCK = threading.Lock()
+
+
+def app_settings_file():
+    return DATA / "app-settings.json"
+
+
+def load_app_settings():
+    """Instellingen die op de pagina Instellingen zijn opgeslagen. Ongeldig of afwezig geeft een lege lijst."""
+    try:
+        data = json.loads(app_settings_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    days = data.get("retention_days") if isinstance(data, dict) else None
+    if isinstance(days, int) and not isinstance(days, bool) and RETENTION_RANGE[0] <= days <= RETENTION_RANGE[1]:
+        return {"retention_days": days}
+    return {}
+
+
+def apply_app_settings():
+    """Laat de pagina Instellingen voorgaan op de optie in Configuratie."""
+    global RETENTION_DAYS
+    RETENTION_DAYS = retention_days({**SETTINGS, **load_app_settings()})
+
+
+def save_app_settings(settings):
+    """Schrijf atomair, zodat een onderbreking nooit een half bestand achterlaat."""
+    target = app_settings_file()
+    staging = target.with_suffix(".tmp")
+    staging.write_text(json.dumps(settings), encoding="utf-8")
+    staging.replace(target)
+
+
+def stored_days():
+    """Het aantal kalenderdagen sinds de oudste meting, of 0 zonder metingen."""
+    with closing(database()) as db:
+        first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
+    if not first:
+        return 0
+    return (datetime.now(ZONE).date() - date.fromisoformat(first[:10])).days + 1
+
+
+def retention_state():
+    return {
+        "retention_days": RETENTION_DAYS, "configured": retention_days(SETTINGS),
+        "from_settings_page": "retention_days" in load_app_settings(),
+        "stored_days": stored_days(), "min": RETENTION_RANGE[0], "max": RETENTION_RANGE[1],
+    }
+
+
+def change_retention(body):
+    """Valideer en bewaar een nieuwe bewaartijd. Geeft (status, antwoord) terug."""
+    days = body.get("retention_days") if isinstance(body, dict) else None
+    low, high = RETENTION_RANGE
+    if not isinstance(days, int) or isinstance(days, bool) or not low <= days <= high:
+        return 400, {"error": f"Kies een heel aantal dagen van {low} tot en met {high}."}
+    with SETTINGS_LOCK:
+        # Alleen een verlaging van de huidige bewaartijd kan nieuwe metingen kosten.
+        if days < RETENTION_DAYS and days < stored_days() and body.get("confirm") is not True:
+            return 409, {"error": "Oudere metingen worden verwijderd. Bevestig dat je dat wilt.",
+                         "stored_days": stored_days()}
+        save_app_settings({**load_app_settings(), "retention_days": days})
+        apply_app_settings()
+    logging.info("Bewaartijd ingesteld op %s dagen", days)
+    return 200, retention_state()
 KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
@@ -788,6 +854,15 @@ class Dashboard(BaseHTTPRequestHandler):
         if url.path in ("/api/backup", "/api/backup/previous"):
             self.download_backup(url.path.endswith("/previous"))
             return
+        if url.path == "/api/settings":
+            try:
+                state = retention_state()
+            except sqlite3.Error:
+                logging.exception("Instellingen konden niet worden gelezen")
+                self.send_json_error(500, "De instellingen konden niet worden gelezen.")
+                return
+            self.reply(json.dumps(state).encode(), "application/json")
+            return
         if url.path == "/api/export.csv":
             query = {key: values[0] for key, values in parse_qs(url.query).items()}
             period = query.get("period", "day")
@@ -870,10 +945,15 @@ class Dashboard(BaseHTTPRequestHandler):
             logging.info("Back-up: %s verzonden (%s bytes)", tag, target.stat().st_size)
 
     def do_POST(self):
-        if self.client_address[0] != "172.30.32.2" or self.headers.get("X-HA-Bandwidth-Restore") != "1":
+        path = urlsplit(self.path).path
+        # Een eigen header dwingt een CORS-preflight af, zodat andere websites hier niet naartoe kunnen posten.
+        header = "X-HA-Bandwidth-Settings" if path == "/api/settings" else "X-HA-Bandwidth-Restore"
+        if self.client_address[0] != "172.30.32.2" or self.headers.get(header) != "1":
             self.send_error(403)
             return
-        path = urlsplit(self.path).path
+        if path == "/api/settings":
+            self.save_settings()
+            return
         action = re.fullmatch(r"/api/backup/scheduled/(restore|delete)/([^/]+)", path)
         if action and BACKUP_NAME.fullmatch(action[2]):
             self.manage_backup(action[1], action[2])
@@ -902,6 +982,24 @@ class Dashboard(BaseHTTPRequestHandler):
             return
         logging.info("Herstel: database teruggezet; eerdere database bewaard als herstelkopie")
         self.reply(b'{"ok":true}', "application/json")
+
+    def save_settings(self):
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+            if not 0 < length <= 1024 or self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+                raise ValueError
+            self.connection.settimeout(10)
+            body = json.loads(self.rfile.read(length))
+        except (ValueError, OSError):
+            self.send_json_error(400, "Ongeldig verzoek.")
+            return
+        try:
+            status, answer = change_retention(body)
+        except (OSError, sqlite3.Error):
+            logging.exception("Instellingen konden niet worden opgeslagen")
+            self.send_json_error(500, "De instelling kon niet worden opgeslagen. Bekijk het app-logboek.")
+            return
+        self.reply(json.dumps(answer).encode(), "application/json", code=status)
 
     def manage_backup(self, action, name):
         target = BACKUP_DIR / name
@@ -996,6 +1094,7 @@ if __name__ == "__main__":
     except OSError:
         logging.warning("Kon de vorige appversie niet lezen of bijwerken")
     initialize()
+    apply_app_settings()
     try:
         LIVE.restore(load_alerts())
     except sqlite3.Error:

@@ -183,6 +183,18 @@ const translations = new Map([
   ["Verwachting einde cyclus: {projected} ({percent}%)",["Expected at end of cycle: {projected} ({percent}%)","Previsto al final del ciclo: {projected} ({percent}%)","Erwartet am Ende des Zeitraums: {projected} ({percent}%)"]],
   ["Nog geen metingen van deze bron in deze cyclus. Controleer de bron onder Configuratie.",["No measurements from this source in this cycle yet. Check the source under Configuration.","Aún no hay mediciones de esta fuente en este ciclo. Comprueba la fuente en Configuración.","In diesem Zeitraum liegen noch keine Messwerte dieser Quelle vor. Prüfe die Quelle unter Konfiguration."]],
   ["Exporteren als CSV",["Export as CSV","Exportar como CSV","Als CSV exportieren"]],
+  ["Bewaartijd",["Retention","Conservación de datos","Aufbewahrungsdauer"]],
+  ["Hoe lang metingen, bestemmingen van apps en verkeerspieken bewaard blijven.",["How long measurements, app destinations and traffic spikes are kept.","Cuánto tiempo se conservan las mediciones, los destinos de las apps y los picos de tráfico.","Wie lange Messwerte, App-Ziele und Verkehrsspitzen aufbewahrt werden."]],
+  ["Aantal dagen",["Number of days","Número de días","Anzahl Tage"]],
+  ["Opslaan",["Save","Guardar","Speichern"]],
+  ["Nu {days} dagen. Er zijn metingen van {stored} dagen. Kies {min} tot en met {max} dagen.",["Now {days} days. You have {stored} days of measurements. Choose {min} to {max} days.","Ahora {days} días. Hay mediciones de {stored} días. Elige de {min} a {max} días.","Jetzt {days} Tage. Es liegen Messwerte von {stored} Tagen vor. Wähle {min} bis {max} Tage."]],
+  [" Deze waarde is op deze pagina ingesteld en gaat voor op de optie in Configuratie ({configured} dagen).",[" This value was set on this page and takes precedence over the option in Configuration ({configured} days)."," Este valor se ha definido en esta página y prevalece sobre la opción de Configuración ({configured} días)."," Dieser Wert wurde auf dieser Seite festgelegt und hat Vorrang vor der Option unter Konfiguration ({configured} Tage)."]],
+  ["Ik wil metingen ouder dan {days} dagen definitief verwijderen. Dit gebeurt bij de eerstvolgende opruiming, na middernacht of bij een herstart van de app.",["I want to permanently delete measurements older than {days} days. This happens at the next cleanup, after midnight or when the app restarts.","Quiero eliminar de forma definitiva las mediciones de más de {days} días. Ocurre en la próxima limpieza, después de medianoche o al reiniciar la app.","Ich möchte Messwerte, die älter als {days} Tage sind, endgültig löschen. Das geschieht bei der nächsten Bereinigung, nach Mitternacht oder beim Neustart der App."]],
+  ["Opgeslagen. Er worden geen metingen verwijderd.",["Saved. No measurements will be deleted.","Guardado. No se eliminará ninguna medición.","Gespeichert. Es werden keine Messwerte gelöscht."]],
+  ["Opgeslagen. Oudere metingen worden bij de eerstvolgende opruiming verwijderd.",["Saved. Older measurements will be deleted at the next cleanup.","Guardado. Las mediciones más antiguas se eliminarán en la próxima limpieza.","Gespeichert. Ältere Messwerte werden bei der nächsten Bereinigung gelöscht."]],
+  ["Kies een heel aantal dagen van {min} tot en met {max}.",["Choose a whole number of days from {min} to {max}.","Elige un número entero de días de {min} a {max}.","Wähle eine ganze Zahl von Tagen zwischen {min} und {max}."]],
+  ["Bevestig eerst dat je oudere metingen wilt verwijderen.",["First confirm that you want to delete older measurements.","Confirma primero que quieres eliminar las mediciones más antiguas.","Bestätige zuerst, dass du ältere Messwerte löschen möchtest."]],
+  ["Opslaan is mislukt. Probeer het opnieuw.",["Saving failed. Try again.","No se pudo guardar. Inténtalo de nuevo.","Speichern fehlgeschlagen. Versuche es erneut."]],
   ["gisteren",["yesterday","ayer","gestern"]],
   ["vorige week",["last week","la semana pasada","letzte Woche"]],
   ["vorige maand",["last month","el mes pasado","letzten Monat"]],
@@ -1132,6 +1144,100 @@ for (const [key, change] of [
     });
   }
 }
+const retention = {state: null};
+
+function retentionInRange() {
+  const input = el("retention-days");
+  const {min, max} = retention.state;
+  const days = Number(input.value);
+  return input.value.trim() !== "" && Number.isInteger(days) && days >= min && days <= max;
+}
+
+function retentionValid() {
+  const valid = retentionInRange();
+  el("retention-days").setAttribute("aria-invalid", String(!valid));
+  return valid;
+}
+
+// Alleen een geldige verlaging die bestaande metingen kost, vraagt om bevestiging.
+function retentionWouldDelete() {
+  if (!retention.state || !retentionInRange()) return false;
+  const days = Number(el("retention-days").value);
+  return days < retention.state.retention_days && days < retention.state.stored_days;
+}
+
+function showRetention(state) {
+  retention.state = state;
+  const input = el("retention-days");
+  input.min = state.min;
+  input.max = state.max;
+  input.value = state.retention_days;
+  input.setAttribute("aria-invalid", "false");
+  el("retention-hint").textContent = t("Nu {days} dagen. Er zijn metingen van {stored} dagen. Kies {min} tot en met {max} dagen.",
+    {days: state.retention_days, stored: state.stored_days, min: state.min, max: state.max}) +
+    (state.from_settings_page ? t(" Deze waarde is op deze pagina ingesteld en gaat voor op de optie in Configuratie ({configured} dagen).", {configured: state.configured}) : "");
+  updateRetentionConfirm();
+}
+
+function updateRetentionConfirm() {
+  const row = el("retention-confirm-row");
+  const deleting = retentionWouldDelete();
+  row.hidden = !deleting;
+  if (!deleting) el("retention-confirm").checked = false;
+  el("retention-confirm-text").textContent = deleting
+    ? t("Ik wil metingen ouder dan {days} dagen definitief verwijderen. Dit gebeurt bij de eerstvolgende opruiming, na middernacht of bij een herstart van de app.", {days: el("retention-days").value})
+    : "";
+}
+
+async function loadRetention() {
+  try {
+    const response = await fetch("./api/settings");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showRetention(await response.json());
+  } catch {
+    el("retention-card").hidden = true;
+  }
+}
+
+el("retention-days").addEventListener("input", () => {
+  el("retention-status").textContent = "";
+  if (retention.state) updateRetentionConfirm();
+});
+
+el("retention-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = el("retention-status");
+  if (!retention.state) return;
+  if (!retentionValid()) {
+    status.textContent = t("Kies een heel aantal dagen van {min} tot en met {max}.", retention.state);
+    return;
+  }
+  if (retentionWouldDelete() && !el("retention-confirm").checked) {
+    status.textContent = t("Bevestig eerst dat je oudere metingen wilt verwijderen.");
+    return;
+  }
+  el("retention-save").disabled = true;
+  try {
+    const response = await fetch("./api/settings", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"},
+      body: JSON.stringify({retention_days: Number(el("retention-days").value), confirm: el("retention-confirm").checked}),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showRetention(data);
+    status.textContent = data.retention_days < data.stored_days
+      ? t("Opgeslagen. Oudere metingen worden bij de eerstvolgende opruiming verwijderd.")
+      : t("Opgeslagen. Er worden geen metingen verwijderd.");
+  } catch {
+    status.textContent = t("Opslaan is mislukt. Probeer het opnieuw.");
+  } finally {
+    el("retention-save").disabled = false;
+  }
+});
+
+loadRetention();
+
 const setupDialog = el("ha-setup-dialog");
 const setupMessages = {
   ready: "Gereed", missing: "Ontbreekt", pending: "Nog niet gereed",
