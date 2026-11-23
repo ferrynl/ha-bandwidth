@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- Nieuwe optie `retention_days` (30 tot en met 3650, standaard 400): bepaal zelf hoe lang metingen, bestemmingen van apps en verkeerspieken bewaard blijven. Een lagere waarde verwijdert oudere metingen bij de eerstvolgende opruiming.
+- Onder de grafiek staat **Exporteren als CSV** voor de periode en bron die je bekijkt.
+- Een test bewaakt dat de grafiek direct onder de totalen blijft staan.
+
 ## 0.11.0
 
 - Databudget: stel een maandbundel in. Het dashboard toont de voortgang en een verwachting voor het einde van de cyclus. Home Assistant krijgt sensoren voor het percentage, het verbruik en het restant, en waarschuwingen bij de ingestelde drempel en bij overschrijding.
