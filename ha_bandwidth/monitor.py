@@ -1,4 +1,6 @@
 import concurrent.futures
+import csv
+import io
 import ipaddress
 import http.client
 import json
@@ -42,6 +44,18 @@ STATUS = {}
 ROUTER_HOSTS = {}
 ROUTER_LINKS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
+
+
+def retention_days(options):
+    """Het aantal lokale kalenderdagen dat metingen bewaard blijven (30 tot en met 3650, standaard 400)."""
+    try:
+        days = int(options.get("retention_days", 400))
+    except (TypeError, ValueError):
+        return 400
+    return min(3650, max(30, days))
+
+
+RETENTION_DAYS = retention_days(SETTINGS)
 KINDS = {"host", "app", "peer", "compare", "device"}
 PREVIOUS_BACKUP = DATA / "pre-restore.sqlite3"
 BACKUP_LOCK = threading.Lock()
@@ -237,10 +251,40 @@ def record(now, rows, prune, destinations=()):
                     rx = rx + excluded.rx, tx = tx + excluded.tx
             """, [(app, day, *details) for app, *details in destinations])
         if prune:
-            cutoff = (now.date() - timedelta(days=399)).isoformat()
+            cutoff = (now.date() - timedelta(days=RETENTION_DAYS - 1)).isoformat()
             db.execute("DELETE FROM traffic WHERE hour < ?", (cutoff,))
             db.execute("DELETE FROM app_destinations WHERE day < ?", (cutoff,))
             db.execute("DELETE FROM traffic_alerts WHERE timestamp < ?", (cutoff,))
+
+
+CSV_COLUMNS = ("bucket", "kind", "source", "label", "download_bytes", "upload_bytes", "total_bytes")
+
+
+def csv_safe(value):
+    """Voorkom dat een spreadsheet een apparaatnaam als formule uitvoert (CSV-injectie)."""
+    value = str(value or "")
+    return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+
+
+def export_csv(day, period, kind, source):
+    """De getoonde periode als CSV, in dezelfde indeling als de grafiek: uur, dag of maand per bron."""
+    start, end = period_bounds(day, period)
+    kinds = ("host", "openwrt", "modem") if kind == "compare" else (kind,)
+    sql = (f"SELECT substr(hour, 1, ?) AS bucket, kind, source, MAX(label) AS label, SUM(rx) AS rx, SUM(tx) AS tx "
+           f"FROM traffic WHERE hour >= ? AND hour < ? AND kind IN ({','.join('?' * len(kinds))})")
+    params = [PERIODS[period], start.isoformat(), end.isoformat(), *kinds]
+    if source:
+        sql += " AND source = ?"
+        params.append(source)
+    with closing(database()) as db:
+        rows = db.execute(sql + " GROUP BY bucket, kind, source ORDER BY bucket, kind, source", params).fetchall()
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(CSV_COLUMNS)
+    for row in rows:
+        writer.writerow([row["bucket"], row["kind"], csv_safe(row["source"]), csv_safe(row["label"]),
+                         row["rx"], row["tx"], row["rx"] + row["tx"]])
+    return "\ufeff" + out.getvalue()  # Met BOM, zodat Excel de UTF-8-tekens goed leest.
 
 
 def store_alerts(alerts):
@@ -744,6 +788,25 @@ class Dashboard(BaseHTTPRequestHandler):
         if url.path in ("/api/backup", "/api/backup/previous"):
             self.download_backup(url.path.endswith("/previous"))
             return
+        if url.path == "/api/export.csv":
+            query = {key: values[0] for key, values in parse_qs(url.query).items()}
+            period = query.get("period", "day")
+            kind = query.get("kind", "host")
+            try:
+                day = date.fromisoformat(query.get("date", datetime.now(ZONE).date().isoformat()))
+                if period not in PERIODS or kind not in KINDS:
+                    raise ValueError
+                body = export_csv(day, period, kind, query.get("source")).encode("utf-8")
+            except (ValueError, OverflowError):
+                self.send_error(400)
+                return
+            except sqlite3.Error:
+                logging.exception("CSV-export is mislukt")
+                self.send_error(500, "Export failed")
+                return
+            self.reply(body, "text/csv; charset=utf-8",
+                       filename=f"ha-bandwidth-{kind}-{period}-{day.isoformat()}.csv")
+            return
         if url.path == "/api/traffic":
             query = {key: values[0] for key, values in parse_qs(url.query).items()}
             period = query.get("period", "day")
@@ -895,9 +958,11 @@ class Dashboard(BaseHTTPRequestHandler):
     def send_json_error(self, code, message):
         self.reply(json.dumps({"error": message}).encode(), "application/json", code)
 
-    def reply(self, content, content_type, code=200):
+    def reply(self, content, content_type, code=200, filename=None):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")

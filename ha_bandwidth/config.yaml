@@ -1,6 +1,6 @@
 name: HA-Bandwidth
 slug: ha_bandwidth
-version: "0.11.0"
+version: "0.12.0"
 description: Netwerkverkeer van de Home Assistant-server en apps
 url: https://github.com/ferrynl/ha-bandwidth
 arch:
@@ -45,6 +45,7 @@ options:
   data_budget_source: modem
   data_budget_reset_day: 1
   data_budget_warn_percent: 80
+  retention_days: 400
 schema:
   create_ha_dashboard: bool
   publish_to_ha: bool
@@ -70,3 +71,4 @@ schema:
   data_budget_source: list(modem|openwrt|host)
   data_budget_reset_day: int(1,28)
   data_budget_warn_percent: int(1,99)
+  retention_days: int(30,3650)

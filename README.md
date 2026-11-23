@@ -61,7 +61,7 @@ De bestemmingshistorie begint met versie 0.2.0. Bestaande verkeerstotalen blijve
 - **Apps** toont Docker-containers met een eigen netwerknamespace en bruikbare tellers. Onder **Gedeeld hostnetwerk** staan containers die de hostinterface delen, zoals Home Assistant Core. Dat verkeer zit in het servertotaal. Een integratie binnen Core heeft hier geen aparte teller. App-tellers kunnen intern Docker-verkeer bevatten. Tel de appregels en het servertotaal daarom niet bij elkaar op.
 - **IP-adressen** toont de externe kant van inkomend en uitgaand IPv4- en IPv6-verkeer op de gekozen interface. Dit zijn waargenomen IP-bytes. Packet drops, offloading, tunnels en het verschil tussen IP- en linklaag kunnen afwijkingen geven ten opzichte van het servertotaal. Het dashboard slaat geen packetinhoud op en koppelt IP-adressen niet aan individuele apps. Met `track_peers: false` kan deze meting uit.
 - Historie begint na installatie. Verkeer van vóór de installatie, zoals een bestaande routerteller, kan niet worden teruggehaald. Tellers worden iedere 30 seconden uitgelezen. Een onderbreking of herstart kan een meetgat veroorzaken.
-- Het dagoverzicht is per uur, week en maand per dag, en jaar per maand. De app bewaart 400 lokale kalenderdagen in SQLite in de eigen `/data`-map. Gebruik een Home Assistant-back-up van de app om historie te behouden.
+- Het dagoverzicht is per uur, week en maand per dag, en jaar per maand. De app bewaart standaard 400 lokale kalenderdagen in SQLite in de eigen `/data`-map (zie [Bewaartijd](#bewaartijd)). Gebruik een Home Assistant-back-up van de app om historie te behouden.
 
 De app gebruikt de Docker-socket uitsluitend voor leesverzoeken. Toegang tot de Docker-socket is een ruime hostmachtiging, ook met een alleen-lezen mount. Ingress biedt toegang via Home Assistant. De HTTP-server weigert verbindingen vanaf andere bronadressen dan de Supervisor-ingressproxy.
 
@@ -146,3 +146,20 @@ automation:
 ```
 
 Een piek is een statistische aanwijzing en geen bewijs van misbruik. De drempels zijn ongewijzigd.
+
+## Bewaartijd
+
+Met `retention_days` bepaal je hoeveel lokale kalenderdagen metingen, bestemmingen van apps en verkeerspieken bewaard blijven. Toegestaan is 30 tot en met 3650 dagen, standaard 400. De app ruimt elke dag op, vanaf de dag dat je de nieuwe waarde opslaat en de app herstart.
+
+- Een **lagere waarde verwijdert de oudere metingen definitief** bij de eerstvolgende opruiming. Download eerst een back-up als je die nog nodig hebt.
+- De vergelijking met het vorige jaar en de jaaroverzichten hebben pas zin met minstens een jaar aan metingen. Met 400 dagen kan dat net.
+- Meer dagen betekent een grotere database en grotere back-ups.
+
+## CSV-export
+
+Onder de grafiek staat **Exporteren als CSV**. Het bestand bevat de periode en bron die je op dat moment bekijkt, met dezelfde indeling als de grafiek: per uur bij een dag, per dag bij een week of maand en per maand bij een jaar. Kolommen: `bucket`, `kind`, `source`, `label`, `download_bytes`, `upload_bytes` en `total_bytes`. Bij **OpenWrt vergelijken** zitten alle drie de bronnen in het bestand.
+
+- Bedragen staan in bytes en de tijden zijn lokale tijd, zoals in het dashboard.
+- Het bestand is UTF-8 met BOM. Staat je Excel op Nederlands en komt alles in één kolom terecht, kies dan *Gegevens → Uit tekst/CSV* en stel de scheidingsteken in op een komma.
+- Namen die met `=`, `+`, `-` of `@` beginnen krijgen een voorafgaande `'`, zodat een spreadsheet ze niet als formule uitvoert.
+- De bestemmingen van apps zitten niet in de export.

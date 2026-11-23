@@ -182,6 +182,7 @@ const translations = new Map([
   ["Nieuwe cyclus over {days} dagen",["New cycle in {days} days","Nuevo ciclo en {days} días","Neuer Zeitraum in {days} Tagen"]],
   ["Verwachting einde cyclus: {projected} ({percent}%)",["Expected at end of cycle: {projected} ({percent}%)","Previsto al final del ciclo: {projected} ({percent}%)","Erwartet am Ende des Zeitraums: {projected} ({percent}%)"]],
   ["Nog geen metingen van deze bron in deze cyclus. Controleer de bron onder Configuratie.",["No measurements from this source in this cycle yet. Check the source under Configuration.","Aún no hay mediciones de esta fuente en este ciclo. Comprueba la fuente en Configuración.","In diesem Zeitraum liegen noch keine Messwerte dieser Quelle vor. Prüfe die Quelle unter Konfiguration."]],
+  ["Exporteren als CSV",["Export as CSV","Exportar como CSV","Als CSV exportieren"]],
   ["gisteren",["yesterday","ayer","gestern"]],
   ["vorige week",["last week","la semana pasada","letzte Woche"]],
   ["vorige maand",["last month","el mes pasado","letzten Monat"]],
@@ -1102,6 +1103,7 @@ async function load() {
   loadBudget();
   const params = new URLSearchParams({kind, period, source});
   if (el("date").value) params.set("date", el("date").value);
+  el("export-csv").href = "./api/export.csv?" + params;
   el("explanation").textContent = views[kind][0];
   el("ranking").textContent = views[kind][1];
   try {
