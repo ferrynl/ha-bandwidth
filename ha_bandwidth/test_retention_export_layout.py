@@ -1,6 +1,7 @@
 """Tests voor de bewaartijd, de CSV-export en de volgorde van de kaarten in het dashboard."""
 import csv
 import io
+import json
 import re
 import tempfile
 import unittest
@@ -178,3 +179,153 @@ class LayoutTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SettingsPageTests(DatabaseCase):
+    def setUp(self):
+        super().setUp()
+        original = monitor.RETENTION_DAYS
+        self.addCleanup(setattr, monitor, "RETENTION_DAYS", original)
+        patcher = patch.dict(monitor.SETTINGS, {"retention_days": 400})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        monitor.apply_app_settings()
+
+    def today_offset(self, days):
+        return (datetime.now(ZONE).date() - __import__("datetime").timedelta(days=days)).isoformat() + "T10"
+
+    def test_defaults_to_the_configuration_option(self):
+        state = monitor.retention_state()
+        self.assertEqual((state["retention_days"], state["configured"], state["from_settings_page"]), (400, 400, False))
+        self.assertEqual((state["min"], state["max"], state["stored_days"]), (30, 3650, 0))
+
+    def test_settings_page_value_wins_and_survives_a_restart(self):
+        status, state = monitor.change_retention({"retention_days": 90})
+        self.assertEqual((status, state["retention_days"], state["from_settings_page"], state["configured"]),
+                         (200, 90, True, 400))
+        self.assertEqual(monitor.RETENTION_DAYS, 90)
+        monitor.RETENTION_DAYS = 400  # Nieuwe procesinstantie.
+        monitor.apply_app_settings()
+        self.assertEqual(monitor.RETENTION_DAYS, 90)
+
+    def test_invalid_values_are_rejected_without_clamping(self):
+        for value in (29, 3651, 0, -5, 90.5, "90", None, True, [90], float("nan")):
+            status, answer = monitor.change_retention({"retention_days": value})
+            self.assertEqual(status, 400, value)
+            self.assertIn("30", answer["error"])
+        self.assertEqual(monitor.change_retention(None)[0], 400)
+        self.assertEqual(monitor.change_retention([])[0], 400)
+        self.assertFalse(monitor.app_settings_file().exists())
+        self.assertEqual(monitor.RETENTION_DAYS, 400)
+
+    def test_deleting_data_needs_an_explicit_confirmation(self):
+        self.add(self.today_offset(200), 1)
+        self.assertEqual(monitor.stored_days(), 201)
+        for confirm in (None, False, "true", 1):
+            status, answer = monitor.change_retention({"retention_days": 100, "confirm": confirm})
+            self.assertEqual(status, 409, confirm)
+            self.assertEqual(answer["stored_days"], 201)
+        self.assertEqual(monitor.RETENTION_DAYS, 400)
+        self.assertFalse(monitor.app_settings_file().exists())
+        self.assertEqual(monitor.change_retention({"retention_days": 100, "confirm": True})[0], 200)
+        self.assertEqual(monitor.RETENTION_DAYS, 100)
+        # Opslaan verwijdert zelf niets; dat gebeurt bij de eerstvolgende opruiming.
+        self.assertEqual(len(self.hours()), 1)
+        monitor.record(datetime.now(ZONE), [], True)
+        self.assertEqual(self.hours(), [])
+
+    def test_only_a_reduction_of_the_current_retention_needs_confirmation(self):
+        self.add(self.today_offset(200), 1)
+        self.assertEqual(monitor.change_retention({"retention_days": 100, "confirm": True})[0], 200)
+        self.assertEqual(monitor.change_retention({"retention_days": 100})[0], 200, "dezelfde waarde nogmaals")
+        self.assertEqual(monitor.change_retention({"retention_days": 150})[0], 200, "een verhoging verwijdert minder")
+        self.assertEqual(monitor.change_retention({"retention_days": 60})[0], 409, "een verlaging vraagt weer om bevestiging")
+        self.assertEqual(monitor.RETENTION_DAYS, 150)
+
+    def test_no_confirmation_needed_when_nothing_would_be_deleted(self):
+        self.add(self.today_offset(10), 1)
+        self.assertEqual(monitor.change_retention({"retention_days": 30})[0], 200)
+        self.assertEqual(monitor.change_retention({"retention_days": 3650})[0], 200)
+
+    def test_corrupt_or_out_of_range_file_is_ignored(self):
+        for content in ("kapot", "[]", '{"retention_days": 5}', '{"retention_days": "90"}', '{"retention_days": true}'):
+            monitor.app_settings_file().write_text(content, encoding="utf-8")
+            monitor.apply_app_settings()
+            self.assertEqual(monitor.RETENTION_DAYS, 400, content)
+
+    def test_invalid_option_in_configuration_still_falls_back(self):
+        with patch.dict(monitor.SETTINGS, {"retention_days": "kapot"}):
+            monitor.apply_app_settings()
+            self.assertEqual(monitor.RETENTION_DAYS, 400)
+
+
+class SettingsHttpTests(DatabaseCase):
+    def setUp(self):
+        super().setUp()
+        from http.server import ThreadingHTTPServer
+        import threading
+
+        class ViaProxy(monitor.Dashboard):
+            client_address = property(lambda self: ("172.30.32.2", 0), lambda self, value: None)
+
+        original = monitor.RETENTION_DAYS
+        self.addCleanup(setattr, monitor, "RETENTION_DAYS", original)
+        patcher = patch.dict(monitor.SETTINGS, {"retention_days": 400})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        monitor.apply_app_settings()
+        self.direct = ThreadingHTTPServer(("127.0.0.1", 0), monitor.Dashboard)
+        self.proxied = ThreadingHTTPServer(("127.0.0.1", 0), ViaProxy)
+        for server in (self.direct, self.proxied):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+
+    def call(self, server, method, body=None, headers=None, raw=None):
+        import urllib.error
+        import urllib.request
+        data = raw if raw is not None else (None if body is None else json.dumps(body).encode())
+        request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/settings", data=data, method=method,
+                                         headers=headers or {})
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, error.read()
+
+    GOOD = {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"}
+
+    def test_get_and_post_through_the_proxy(self):
+        status, state = self.call(self.proxied, "GET")
+        self.assertEqual((status, state["retention_days"]), (200, 400))
+        status, state = self.call(self.proxied, "POST", {"retention_days": 120}, self.GOOD)
+        self.assertEqual((status, state["retention_days"], state["from_settings_page"]), (200, 120, True))
+        self.assertEqual(self.call(self.proxied, "GET")[1]["retention_days"], 120)
+
+    def test_other_clients_and_cross_site_posts_are_refused(self):
+        self.assertEqual(self.call(self.direct, "GET")[0], 403)
+        self.assertEqual(self.call(self.direct, "POST", {"retention_days": 120}, self.GOOD)[0], 403)
+        no_header = {"Content-Type": "application/json"}
+        self.assertEqual(self.call(self.proxied, "POST", {"retention_days": 120}, no_header)[0], 403)
+        restore_header = {"Content-Type": "application/json", "X-HA-Bandwidth-Restore": "1"}
+        self.assertEqual(self.call(self.proxied, "POST", {"retention_days": 120}, restore_header)[0], 403)
+        self.assertFalse(monitor.app_settings_file().exists())
+
+    def test_bad_requests_get_a_400_and_change_nothing(self):
+        self.assertEqual(self.call(self.proxied, "POST", {"retention_days": 5}, self.GOOD)[0], 400)
+        self.assertEqual(self.call(self.proxied, "POST", raw=b"kapot", headers=self.GOOD)[0], 400)
+        self.assertEqual(self.call(self.proxied, "POST", raw=b"", headers=self.GOOD)[0], 400)
+        self.assertEqual(self.call(self.proxied, "POST", raw=b" " * 2000, headers=self.GOOD)[0], 400)
+        plain = {"Content-Type": "text/plain", "X-HA-Bandwidth-Settings": "1"}
+        self.assertEqual(self.call(self.proxied, "POST", {"retention_days": 120}, plain)[0], 400)
+        self.assertEqual(monitor.RETENTION_DAYS, 400)
+
+    def test_confirmation_error_is_a_409_over_http(self):
+        self.add(self.today(200), 1)
+        status, answer = self.call(self.proxied, "POST", {"retention_days": 100}, self.GOOD)
+        self.assertEqual(status, 409)
+        self.assertEqual(self.call(self.proxied, "POST", {"retention_days": 100, "confirm": True}, self.GOOD)[0], 200)
+
+    def today(self, days):
+        from datetime import timedelta
+        return (datetime.now(ZONE).date() - timedelta(days=days)).isoformat() + "T10"

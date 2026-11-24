@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1
+
+- De bewaartijd stel je nu ook in op de pagina **Instellingen** van het dashboard, zonder herstart. Bij een verlaging vraagt het dashboard eerst om bevestiging, omdat oudere metingen dan verdwijnen. De waarde van die pagina gaat voor op de optie `retention_days` in Configuratie.
+
 ## 0.12.0
 
 - Nieuwe optie `retention_days` (30 tot en met 3650, standaard 400): bepaal zelf hoe lang metingen, bestemmingen van apps en verkeerspieken bewaard blijven. Een lagere waarde verwijdert oudere metingen bij de eerstvolgende opruiming.
