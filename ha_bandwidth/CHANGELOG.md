@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.1
+
+- Op het tabblad Apparaten staat de netwerkkaart nu onder de grafiek, zodat de grafiek altijd direct onder de totalen staat.
+- De bewaartijd staat alleen nog op de pagina **Instellingen**. De optie `retention_days` is uit de configuratie gehaald. Een eerder ingestelde waarde blijft als beginwaarde werken.
+
 ## 0.13.0
 
 - Databudget: vul op de pagina **Instellingen** het verbruik in dat je provider toont, zodat een budget midden in een cyclus klopt. De correctie geldt alleen voor de lopende cyclus en is te wissen.

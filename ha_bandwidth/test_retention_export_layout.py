@@ -158,8 +158,8 @@ class LayoutTests(unittest.TestCase):
         order = [ids.index(name) for name in ("totals", "history", "destinations", "ranking-panel")]
         self.assertEqual(order, sorted(order), "totalen, grafiek, bestemmingen, ranglijst")
         between = [name for name in ids[order[0] + 1:order[1]] if name in ("destinations", "ranking-panel", "topology-panel")]
-        # Bewuste uitzondering: op het tabblad Apparaten kies je apparaten op de netwerkkaart.
-        self.assertEqual(between, ["topology-panel"], "alleen de netwerkkaart staat nog tussen totalen en grafiek")
+        self.assertEqual(between, [], "niets staat tussen totalen en grafiek")
+        self.assertLess(ids.index("history"), ids.index("topology-panel"), "de netwerkkaart staat onder de grafiek")
 
     def test_every_html_id_is_unique(self):
         ids = self.outline.ids
