@@ -143,11 +143,12 @@ body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{di
 .budget[data-state=exceeded] #budget-state{color:#ff8175}
 .budget p{margin:0 0 .3em;font-size:.9rem}
 .budget p:empty{display:none}
-body[data-dashboard-card] #budget{display:none}
+body[data-dashboard-card]:not([data-dashboard-card="budget"]) #budget{display:none}
 
 /* Bewaartijd */
-#retention-form input[type=number]{display:block;width:8em;margin:.3em 0 .6em;padding:.45em .6em;color:var(--text);background:#0e1a2c;border:1px solid var(--line);border-radius:9px;font:inherit}
-#retention-form label{display:block}
-#retention-form p{margin:.4em 0;font-size:.9rem}
-#retention-form p:empty{display:none}
-#retention-form [aria-invalid=true]{border-color:#ff8175}
+#retention-form input[type=number],#calibration-form input[type=number]{display:block;width:8em;margin:.3em 0 .6em;padding:.45em .6em;color:var(--text);background:#0e1a2c;border:1px solid var(--line);border-radius:9px;font:inherit}
+#retention-form label,#calibration-form label{display:block}
+#retention-form p,#calibration-form p{margin:.4em 0;font-size:.9rem}
+#retention-form p:empty,#calibration-form p:empty{display:none}
+#retention-form [aria-invalid=true],#calibration-form [aria-invalid=true]{border-color:#ff8175}
+.budget p#budget-note{color:var(--muted)}

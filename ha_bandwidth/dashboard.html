@@ -69,6 +69,7 @@
     <p id="budget-used"></p>
     <p id="budget-cycle"></p>
     <p id="budget-projection"></p>
+    <p id="budget-note"></p>
   </section>
   <section class="controls" aria-label="Periode kiezen">
     <nav aria-label="Periode">
@@ -181,6 +182,18 @@
         <label id="retention-confirm-row" hidden><input id="retention-confirm" type="checkbox"> <span id="retention-confirm-text"></span></label>
         <button id="retention-save" type="submit">Opslaan</button>
         <p id="retention-status" role="status"></p>
+      </form>
+    </section>
+    <section class="card" id="calibration-card" aria-labelledby="calibration-title" hidden>
+      <h2 id="calibration-title">Databudget kalibreren</h2>
+      <p id="calibration-intro">Begon je met de app midden in een cyclus, of loopt de telling achter op je provider? Vul in wat je provider nu aan verbruik meldt. De app telt de rest van de cyclus zelf door.</p>
+      <form id="calibration-form" novalidate>
+        <label for="calibration-used">Verbruikt volgens je provider (GB)</label>
+        <input id="calibration-used" type="number" inputmode="decimal" min="0" step="any" required aria-describedby="calibration-hint calibration-status">
+        <p id="calibration-hint"></p>
+        <button id="calibration-save" type="submit">Opslaan</button>
+        <button id="calibration-clear" type="button" hidden>Correctie wissen</button>
+        <p id="calibration-status" role="status"></p>
       </form>
     </section>
   </section>

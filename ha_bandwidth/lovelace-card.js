@@ -2,7 +2,7 @@ import {mountDashboard} from "./dashboard.js";
 
 const base = new URL("./", import.meta.url);
 const sections = {
-  overview: "Volledig dashboard", live: "Realtime verkeer en afwijkingen", controls: "Kop en periodekeuze", totals: "Totalen",
+  overview: "Volledig dashboard", budget: "Databudget", live: "Realtime verkeer en afwijkingen", controls: "Kop en periodekeuze", totals: "Totalen",
   history: "Verkeersgrafiek", ranking: "Verkeerstabel", destinations: "Bestemmingen",
   shared: "Gedeeld netwerk", topology: "Netwerkdiagram", comparison: "Vergelijking", backup: "Back-up",
 };
@@ -12,6 +12,7 @@ const selected = {
   live: ["#live-panel"],
   controls: ["header", "#explanation", "#warnings", ".controls", "#range"],
   totals: ["#totals"],
+  budget: ["#budget"],
   history: [".history"],
   ranking: ["#ranking-panel"],
   destinations: ["#destinations"],

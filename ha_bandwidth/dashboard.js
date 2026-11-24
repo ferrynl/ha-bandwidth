@@ -195,6 +195,17 @@ const translations = new Map([
   ["Kies een heel aantal dagen van {min} tot en met {max}.",["Choose a whole number of days from {min} to {max}.","Elige un número entero de días de {min} a {max}.","Wähle eine ganze Zahl von Tagen zwischen {min} und {max}."]],
   ["Bevestig eerst dat je oudere metingen wilt verwijderen.",["First confirm that you want to delete older measurements.","Confirma primero que quieres eliminar las mediciones más antiguas.","Bestätige zuerst, dass du ältere Messwerte löschen möchtest."]],
   ["Opslaan is mislukt. Probeer het opnieuw.",["Saving failed. Try again.","No se pudo guardar. Inténtalo de nuevo.","Speichern fehlgeschlagen. Versuche es erneut."]],
+  ["Stel data_budget_gb in bij Configuratie om je databundel te volgen.",["Set data_budget_gb under Configuration to track your data plan.","Define data_budget_gb en Configuración para seguir tu tarifa de datos.","Lege data_budget_gb unter Konfiguration fest, um dein Datenvolumen zu verfolgen."]],
+  ["Databudget kalibreren",["Calibrate data budget","Calibrar el presupuesto de datos","Datenbudget abgleichen"]],
+  ["Begon je met de app midden in een cyclus, of loopt de telling achter op je provider? Vul in wat je provider nu aan verbruik meldt. De app telt de rest van de cyclus zelf door.",["Did you start the app partway through a cycle, or is the count behind your provider's? Enter the usage your provider reports now. The app counts the rest of the cycle itself.","¿Empezaste a usar la app a mitad de un ciclo, o el recuento va por detrás de tu proveedor? Introduce el consumo que indica ahora tu proveedor. La app cuenta el resto del ciclo por sí sola.","Hast du die App mitten in einem Zeitraum gestartet, oder liegt die Zählung hinter deinem Anbieter zurück? Trage ein, was dein Anbieter jetzt als Verbrauch meldet. Den Rest des Zeitraums zählt die App selbst."]],
+  ["Verbruikt volgens je provider (GB)",["Used according to your provider (GB)","Consumido según tu proveedor (GB)","Verbraucht laut deinem Anbieter (GB)"]],
+  ["Correctie wissen",["Clear correction","Borrar corrección","Korrektur löschen"]],
+  ["De app telde {counted} in deze cyclus ({start} tot en met {end}).",["The app counted {counted} in this cycle ({start} through {end}).","La app contó {counted} en este ciclo ({start} al {end}).","Die App hat in diesem Zeitraum {counted} gezählt ({start} bis {end})."]],
+  [" Nu geldt een correctie van {offset}. Die vervalt aan het einde van de cyclus.",[" A correction of {offset} applies now. It expires at the end of the cycle."," Ahora se aplica una corrección de {offset}. Caduca al final del ciclo."," Derzeit gilt eine Korrektur von {offset}. Sie läuft am Ende des Zeitraums ab."]],
+  ["Gecorrigeerd met de stand van je provider ({offset}).",["Adjusted to your provider's reading ({offset}).","Ajustado con la lectura de tu proveedor ({offset}).","Mit dem Stand deines Anbieters abgeglichen ({offset})."]],
+  ["Opgeslagen. De budgetbalk gebruikt nu {used}.",["Saved. The budget bar now uses {used}.","Guardado. La barra del presupuesto usa ahora {used}.","Gespeichert. Die Budgetanzeige verwendet jetzt {used}."]],
+  ["Correctie gewist.",["Correction cleared.","Corrección borrada.","Korrektur gelöscht."]],
+  ["Vul een getal van 0 of hoger in.",["Enter a number of 0 or more.","Introduce un número igual o mayor que 0.","Gib eine Zahl ab 0 ein."]],
   ["gisteren",["yesterday","ayer","gestern"]],
   ["vorige week",["last week","la semana pasada","letzte Woche"]],
   ["vorige maand",["last month","el mes pasado","letzten Monat"]],
@@ -274,7 +285,7 @@ const views = {
 const monthFormat = new Intl.DateTimeFormat(locale, {month: "short", timeZone: "UTC"});
 const dateFormat = new Intl.DateTimeFormat(locale, {dateStyle: "medium", timeZone: "UTC"});
 const months = Array.from({length: 12}, (_, index) => monthFormat.format(Date.UTC(2020, index, 1)));
-const embeddedCards = new Set(["history", "ranking", "destinations", "app-details", "shared", "topology", "comparison", "backup", "live"]);
+const embeddedCards = new Set(["history", "ranking", "destinations", "app-details", "shared", "topology", "comparison", "backup", "live", "budget"]);
 const embeddedCard = pageUrl.searchParams.get("card");
 const embeddedKind = pageUrl.searchParams.get("kind");
 if (embeddedCards.has(embeddedCard)) document.body.dataset.dashboardCard = embeddedCard;
@@ -924,11 +935,24 @@ const budgetStates = {ok: "Binnen budget", warning: "Bijna op", exceeded: "Budge
 
 async function loadBudget() {
   const panel = el("budget");
+  // Andere kaartdelen tonen het budget niet, dus daar is ophalen overbodig.
+  if (embeddedCard && embeddedCard !== "budget") return;
   try {
     const response = await fetch("./api/budget");
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
-    if (!data.enabled) throw new Error("uit");
+    if (!data.enabled) {
+      // In een eigen kaart is een lege plek verwarrend; leg daar uit hoe je het budget aanzet.
+      panel.hidden = embeddedCard !== "budget";
+      panel.dataset.state = "off";
+      el("budget-title").textContent = t("Databudget");
+      el("budget-state").textContent = t("Uitgeschakeld");
+      el("budget-progress").hidden = true;
+      el("budget-used").textContent = t("Stel data_budget_gb in bij Configuratie om je databundel te volgen.");
+      for (const id of ["budget-cycle", "budget-projection", "budget-note"]) el(id).textContent = "";
+      return;
+    }
+    el("budget-progress").hidden = false;
     panel.dataset.state = data.state;
     el("budget-title").textContent = t("Databudget") + " · " + data.source_label;
     el("budget-state").textContent = t(budgetStates[data.state]);
@@ -938,6 +962,9 @@ async function loadBudget() {
     const range = {start: dateFormat.format(new Date(data.cycle_start)), end: dateFormat.format(new Date(data.cycle_end))};
     el("budget-cycle").textContent = t("Cyclus {start} tot en met {end}", range) + " · " +
       (data.days_left === 1 ? t("Nieuwe cyclus morgen") : t("Nieuwe cyclus over {days} dagen", {days: data.days_left}));
+    const signedBytes = amount => (amount >= 0 ? "+" : "−") + bytes(Math.abs(amount));
+    el("budget-note").textContent = data.offset
+      ? t("Gecorrigeerd met de stand van je provider ({offset}).", {offset: signedBytes(data.offset)}) : "";
     el("budget-projection").textContent = !data.measured
       ? t("Nog geen metingen van deze bron in deze cyclus. Controleer de bron onder Configuratie.")
       : data.projected === null ? ""
@@ -1115,7 +1142,8 @@ async function load() {
   loadBudget();
   const params = new URLSearchParams({kind, period, source});
   if (el("date").value) params.set("date", el("date").value);
-  el("export-csv").href = "./api/export.csv?" + params;
+  // Los op tegen het adres van de app, niet tegen de pagina: in een Home Assistant-kaart zijn die verschillend.
+  el("export-csv").href = new URL("./api/export.csv?" + params, pageUrl).href;
   el("explanation").textContent = views[kind][0];
   el("ranking").textContent = views[kind][1];
   try {
@@ -1190,6 +1218,7 @@ function updateRetentionConfirm() {
 }
 
 async function loadRetention() {
+  if (embeddedCard) return;
   try {
     const response = await fetch("./api/settings");
     if (!response.ok) throw new Error("HTTP " + response.status);
@@ -1237,6 +1266,74 @@ el("retention-form").addEventListener("submit", async event => {
 });
 
 loadRetention();
+
+const calibration = {status: null};
+const signedAmount = amount => (amount >= 0 ? "+" : "−") + bytes(Math.abs(amount));
+
+function showCalibration(status) {
+  const card = el("calibration-card");
+  calibration.status = status;
+  card.hidden = !status?.enabled;
+  if (card.hidden) return;
+  const range = {start: dateFormat.format(new Date(status.cycle_start)), end: dateFormat.format(new Date(status.cycle_end))};
+  el("calibration-hint").textContent =
+    t("De app telde {counted} in deze cyclus ({start} tot en met {end}).", {counted: bytes(status.counted), ...range}) +
+    (status.offset ? t(" Nu geldt een correctie van {offset}. Die vervalt aan het einde van de cyclus.", {offset: signedAmount(status.offset)}) : "");
+  el("calibration-clear").hidden = !status.offset;
+}
+
+async function loadCalibration() {
+  if (embeddedCard) return;
+  try {
+    const response = await fetch("./api/budget");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showCalibration(await response.json());
+  } catch {
+    el("calibration-card").hidden = true;
+  }
+}
+
+async function saveCalibration(usedGb) {
+  const status = el("calibration-status");
+  el("calibration-save").disabled = el("calibration-clear").disabled = true;
+  try {
+    const response = await fetch("./api/settings/budget", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"},
+      body: JSON.stringify({used_gb: usedGb}),
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    showCalibration(data);
+    status.textContent = usedGb === null ? t("Correctie gewist.")
+      : t("Opgeslagen. De budgetbalk gebruikt nu {used}.", {used: bytes(data.used)});
+    el("calibration-used").value = "";
+    loadBudget();
+  } catch {
+    status.textContent = t("Opslaan is mislukt. Probeer het opnieuw.");
+  } finally {
+    el("calibration-save").disabled = el("calibration-clear").disabled = false;
+  }
+}
+
+el("calibration-used").addEventListener("input", () => {
+  el("calibration-status").textContent = "";
+  el("calibration-used").setAttribute("aria-invalid", "false");
+});
+el("calibration-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const input = el("calibration-used");
+  const value = Number(input.value);
+  const valid = input.value.trim() !== "" && Number.isFinite(value) && value >= 0 && value <= 1000000;
+  input.setAttribute("aria-invalid", String(!valid));
+  if (!valid) {
+    el("calibration-status").textContent = t("Vul een getal van 0 of hoger in.");
+    return;
+  }
+  saveCalibration(value);
+});
+el("calibration-clear").addEventListener("click", () => saveCalibration(null));
+loadCalibration();
 
 const setupDialog = el("ha-setup-dialog");
 const setupMessages = {
