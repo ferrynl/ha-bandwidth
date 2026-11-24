@@ -38,6 +38,15 @@
             },
             {
               "type": "custom:ha-bandwidth-card",
+              "part": "budget",
+              "kind": "host",
+              "grid_options": {
+                "columns": "full",
+                "rows": "auto"
+              }
+            },
+            {
+              "type": "custom:ha-bandwidth-card",
               "part": "totals",
               "kind": "host",
               "sync": true,

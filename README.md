@@ -41,7 +41,7 @@ Open **Apparaten** in HA-Bandwidth. De tabel toont upload en download per appara
 
 ## Back-up
 
-Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen. De bewaarde verkeerspieken zitten wel in het gedownloade bestand, maar worden bij het terugzetten niet teruggezet.
+Open **Back-up** om een SQLite-kopie met de volledige meetgeschiedenis te downloaden. Selecteer een SQLite-back-up van HA-Bandwidth, bevestig de vervanging en klik op **Back-up terugzetten**. De app controleert het bestand en bewaart automatisch één downloadbare kopie van de meetgegevens van vóór het terugzetten. Het uploadmaximum is 256 MiB. Een back-up via Home Assistant zelf blijft beschikbaar voor de hele app inclusief instellingen. De bewaarde verkeerspieken worden mee teruggezet. Een oudere back-up zonder pieken laat de huidige pieken ongemoeid.
 
 ## Bronnen en bestemmingen van de server
 
@@ -99,7 +99,9 @@ Stel onder **HA-Bandwidth → Configuratie** het budget in van je databundel. Zo
 | `data_budget_reset_day` | De dag van de maand waarop je cyclus begint, 1 tot en met 28. Een cyclus loopt van middernacht tot middernacht, in de ingestelde tijdzone. |
 | `data_budget_warn_percent` | Het percentage waarbij de waarschuwing aangaat, standaard 80. |
 
-Het dashboard toont boven de periodekeuze een voortgangsbalk met het verbruik (download plus upload van de gekozen bron), de einddatum van de cyclus en na een dag aan metingen een verwachting voor het einde van de cyclus. Die verwachting is lineair en dus alleen een indicatie. Alleen metingen sinds de installatie tellen mee: begin je midden in een cyclus, dan is het verbruik lager dan bij je provider.
+Het dashboard toont boven de periodekeuze een voortgangsbalk met het verbruik (download plus upload van de gekozen bron), de einddatum van de cyclus en na een dag aan metingen een verwachting voor het einde van de cyclus. Die verwachting is lineair en dus alleen een indicatie. De app telt alleen metingen sinds de installatie. Begin je midden in een cyclus, dan staat het verbruik lager dan bij je provider. Vul daarom op de pagina **Instellingen** onder het budget het verbruik in dat je provider nu toont. De app bewaart het verschil als correctie, alleen voor de lopende cyclus, en je kunt de correctie wissen. In een nieuwe cyclus vervalt ze vanzelf. De correctie staat als `adjustment` bij de budgetsensor.
+
+Het budget is ook een kaartonderdeel (**Databudget**) voor je eigen Home Assistant-dashboard. Nieuwe automatisch aangemaakte dashboards bevatten de kaart. Een bestaand dashboard wijzigt de app niet, voeg de kaart daar zelf toe.
 
 Met `publish_to_ha` aan maakt de app deze entiteiten bij het apparaat **HA-Bandwidth**:
 

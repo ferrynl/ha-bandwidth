@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0
+
+- Databudget: vul op de pagina **Instellingen** het verbruik in dat je provider toont, zodat een budget midden in een cyclus klopt. De correctie geldt alleen voor de lopende cyclus en is te wissen.
+- Een back-up zet nu ook de bewaarde verkeerspieken terug. Oudere back-ups zonder pieken laten de huidige pieken staan.
+- Het databudget is een kaartonderdeel voor Home Assistant en staat in het automatisch aangemaakte dashboard.
+
 ## 0.12.1
 
 - De bewaartijd stel je nu ook in op de pagina **Instellingen** van het dashboard, zonder herstart. Bij een verlaging vraagt het dashboard eerst om bevestiging, omdat oudere metingen dan verdwijnen. De waarde van die pagina gaat voor op de optie `retention_days` in Configuratie.

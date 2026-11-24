@@ -95,7 +95,7 @@ def budget_entities(status):
         "source": status["source_label"], "cycle_start": status["cycle_start"],
         "cycle_end": status["cycle_end"], "days_left": status["days_left"],
         "projected": status["projected"], "projected_percent": status["projected_percent"],
-        "warn_percent": status["warn_percent"],
+        "warn_percent": status["warn_percent"], "adjustment": status.get("offset", 0),
     }
     size = {"device_class": "data_size", "unit_of_measurement": "B"}
     return [

@@ -5,6 +5,7 @@ import ipaddress
 import http.client
 import json
 import logging
+import math
 from logging.handlers import RotatingFileHandler
 import os
 import re
@@ -24,7 +25,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
-from budget import cycle_bounds, settings as budget_settings, status as evaluate_budget
+from budget import BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
 from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
@@ -70,10 +71,22 @@ def load_app_settings():
         data = json.loads(app_settings_file().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    days = data.get("retention_days") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return {}
+    settings = {}
+    days = data.get("retention_days")
     if isinstance(days, int) and not isinstance(days, bool) and RETENTION_RANGE[0] <= days <= RETENTION_RANGE[1]:
-        return {"retention_days": days}
-    return {}
+        settings["retention_days"] = days
+    calibration = data.get("budget_calibration")
+    if isinstance(calibration, dict):
+        offset = calibration.get("offset")
+        try:
+            cycle = date.fromisoformat(calibration["cycle_start"]).isoformat()
+        except (KeyError, TypeError, ValueError):
+            cycle = None
+        if cycle and isinstance(offset, int) and not isinstance(offset, bool) and abs(offset) <= 10**15:
+            settings["budget_calibration"] = {"cycle_start": cycle, "offset": offset}
+    return settings
 
 
 def apply_app_settings():
@@ -395,6 +408,44 @@ def alerts_today(now):
 BUDGET_LABELS = {"openwrt": "OpenWrt WAN", "host": "Server"}
 
 
+def measured_budget_bytes(config, start, end):
+    """De gemeten bytes en het aantal meetrijen van de gekozen bron in een cyclus."""
+    with closing(database()) as db:
+        return tuple(db.execute(
+            "SELECT COALESCE(SUM(rx + tx), 0), COUNT(*) FROM traffic WHERE kind = ? AND hour >= ? AND hour < ?",
+            (config["source"], start.isoformat(), end.isoformat())).fetchone())
+
+
+def calibrate_budget(body, now=None):
+    """Zet het verbruik van de lopende cyclus gelijk aan de stand van de provider, of wis de correctie.
+
+    Body: {"used_gb": 37.5} stelt in, {"used_gb": null} wist. Geeft (status, antwoord) terug.
+    """
+    now = now or datetime.now(ZONE)
+    config = budget_settings(SETTINGS)
+    if config is None:
+        return 400, {"error": "Het databudget staat uit. Stel eerst data_budget_gb in bij Configuratie."}
+    if not isinstance(body, dict) or "used_gb" not in body:
+        return 400, {"error": "Vul het verbruik in gigabytes in."}
+    value = body["used_gb"]
+    clear = value is None
+    if not clear and (isinstance(value, bool) or not isinstance(value, (int, float))
+                      or not math.isfinite(value) or not 0 <= value <= 1_000_000):
+        return 400, {"error": "Vul een getal in van 0 tot en met 1.000.000 gigabyte."}
+    with SETTINGS_LOCK:
+        settings = load_app_settings()
+        if clear:
+            settings.pop("budget_calibration", None)
+        else:
+            start, end = cycle_bounds(now.date(), config["reset_day"])
+            counted, _ = measured_budget_bytes(config, start, end)
+            settings["budget_calibration"] = {"cycle_start": start.isoformat(),
+                                              "offset": round(value * BYTES_PER_GB) - counted}
+        save_app_settings(settings)
+    logging.info("Databudget gekalibreerd" if not clear else "Databudgetcorrectie gewist")
+    return 200, dict(budget_status(now), enabled=True)
+
+
 def budget_status(now=None):
     """Het huidige databudget, of None als het budget is uitgeschakeld."""
     config = budget_settings(SETTINGS)
@@ -402,11 +453,13 @@ def budget_status(now=None):
         return None
     now = now or datetime.now(ZONE)
     start, end = cycle_bounds(now.date(), config["reset_day"])
-    with closing(database()) as db:
-        used, rows = db.execute(
-            "SELECT COALESCE(SUM(rx + tx), 0), COUNT(*) FROM traffic WHERE kind = ? AND hour >= ? AND hour < ?",
-            (config["source"], start.isoformat(), end.isoformat())).fetchone()
-    result = evaluate_budget(config, used, now, measured=rows > 0)
+    counted, rows = measured_budget_bytes(config, start, end)
+    # Een kalibratie geldt alleen in de cyclus waarin ze is ingesteld. Daarna zijn de metingen compleet.
+    calibration = load_app_settings().get("budget_calibration")
+    offset = calibration["offset"] if calibration and calibration["cycle_start"] == start.isoformat() else 0
+    result = evaluate_budget(config, max(0, counted + offset), now, measured=rows > 0 or offset != 0)
+    result["counted"] = counted
+    result["offset"] = offset
     result["source_label"] = (SETTINGS.get("upstream_modem_name", "").strip() or "Modem") \
         if config["source"] == "modem" else BUDGET_LABELS[config["source"]]
     return result
@@ -947,12 +1000,13 @@ class Dashboard(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlsplit(self.path).path
         # Een eigen header dwingt een CORS-preflight af, zodat andere websites hier niet naartoe kunnen posten.
-        header = "X-HA-Bandwidth-Settings" if path == "/api/settings" else "X-HA-Bandwidth-Restore"
+        change = {"/api/settings": change_retention, "/api/settings/budget": calibrate_budget}.get(path)
+        header = "X-HA-Bandwidth-Settings" if change else "X-HA-Bandwidth-Restore"
         if self.client_address[0] != "172.30.32.2" or self.headers.get(header) != "1":
             self.send_error(403)
             return
-        if path == "/api/settings":
-            self.save_settings()
+        if change:
+            self.save_settings(change)
             return
         action = re.fullmatch(r"/api/backup/scheduled/(restore|delete)/([^/]+)", path)
         if action and BACKUP_NAME.fullmatch(action[2]):
@@ -983,7 +1037,7 @@ class Dashboard(BaseHTTPRequestHandler):
         logging.info("Herstel: database teruggezet; eerdere database bewaard als herstelkopie")
         self.reply(b'{"ok":true}', "application/json")
 
-    def save_settings(self):
+    def save_settings(self, change):
         try:
             length = int(self.headers.get("Content-Length", ""))
             if not 0 < length <= 1024 or self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
@@ -994,7 +1048,7 @@ class Dashboard(BaseHTTPRequestHandler):
             self.send_json_error(400, "Ongeldig verzoek.")
             return
         try:
-            status, answer = change_retention(body)
+            status, answer = change(body)
         except (OSError, sqlite3.Error):
             logging.exception("Instellingen konden niet worden opgeslagen")
             self.send_json_error(500, "De instelling kon niet worden opgeslagen. Bekijk het app-logboek.")
