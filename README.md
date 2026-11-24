@@ -153,7 +153,7 @@ Een piek is een statistische aanwijzing en geen bewijs van misbruik. De drempels
 
 Je stelt hoeveel lokale kalenderdagen metingen, bestemmingen van apps en verkeerspieken bewaard blijven in op de pagina **Instellingen** van het dashboard, onder **Bewaartijd**. Toegestaan is 30 tot en met 3650 dagen, standaard 400. De app ruimt op bij elke start en na middernacht.
 
-De waarde van de pagina Instellingen gaat voor op de optie `retention_days` onder **HA-Bandwidth → Configuratie**. Die optie blijft de beginwaarde: zolang je op de pagina niets hebt opgeslagen, geldt de optie. De pagina laat zien welke waarde nu geldt en of die van de pagina Instellingen komt. Een wijziging werkt direct, ook zonder herstart, en wordt bewaard in `/data`.
+De optie `retention_days` onder **HA-Bandwidth → Configuratie** bestaat niet meer. Een waarde die je daar eerder instelde blijft als beginwaarde werken zolang je op de pagina niets hebt opgeslagen. De pagina laat zien welke waarde nu geldt. Een wijziging werkt direct, ook zonder herstart, en wordt bewaard in `/data`.
 
 - Een **lagere waarde verwijdert de oudere metingen definitief** bij de eerstvolgende opruiming. Het dashboard vraagt daarvoor eerst om een vinkje. Opslaan zelf verwijdert niets. Download eerst een back-up als je de oudere metingen nog nodig hebt.
 - De vergelijking met het vorige jaar en de jaaroverzichten hebben pas zin met minstens een jaar aan metingen. Met 400 dagen kan dat net.
