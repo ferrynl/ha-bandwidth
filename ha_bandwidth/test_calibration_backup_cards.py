@@ -108,7 +108,7 @@ class CalibrationTests(DatabaseCase):
         with patch.dict(monitor.SETTINGS, {"data_budget_gb": 0}):
             code, answer = monitor.calibrate_budget({"used_gb": 5}, NOW)
         self.assertEqual(code, 400)
-        self.assertIn("data_budget_gb", answer["error"])
+        self.assertIn("limiet", answer["error"])
 
     def test_calibration_and_retention_do_not_overwrite_each_other(self):
         monitor.calibrate_budget({"used_gb": 37.5}, NOW)

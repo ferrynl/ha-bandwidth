@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0
+
+- Het databudget stel je nu ook in op de pagina **Instellingen**: limiet, bron, dag waarop de cyclus begint en waarschuwingspercentage, zonder herstart. De opties in Configuratie blijven de beginwaarde.
+
 ## 0.13.1
 
 - Op het tabblad Apparaten staat de netwerkkaart nu onder de grafiek, zodat de grafiek altijd direct onder de totalen staat.

@@ -146,9 +146,9 @@ body[data-dashboard-card]:not([data-dashboard-card="shared"]) #shared-section{di
 body[data-dashboard-card]:not([data-dashboard-card="budget"]) #budget{display:none}
 
 /* Bewaartijd */
-#retention-form input[type=number],#calibration-form input[type=number]{display:block;width:8em;margin:.3em 0 .6em;padding:.45em .6em;color:var(--text);background:#0e1a2c;border:1px solid var(--line);border-radius:9px;font:inherit}
-#retention-form label,#calibration-form label{display:block}
-#retention-form p,#calibration-form p{margin:.4em 0;font-size:.9rem}
-#retention-form p:empty,#calibration-form p:empty{display:none}
-#retention-form [aria-invalid=true],#calibration-form [aria-invalid=true]{border-color:#ff8175}
+#retention-form input[type=number],#calibration-form input[type=number],#budget-config-form input[type=number],#budget-config-form select{display:block;width:8em;margin:.3em 0 .6em;padding:.45em .6em;color:var(--text);background:#0e1a2c;border:1px solid var(--line);border-radius:9px;font:inherit}
+#retention-form label,#calibration-form label,#budget-config-form label{display:block}
+#retention-form p,#calibration-form p,#budget-config-form p{margin:.4em 0;font-size:.9rem}
+#retention-form p:empty,#calibration-form p:empty,#budget-config-form p:empty{display:none}
+#retention-form [aria-invalid=true],#calibration-form [aria-invalid=true],#budget-config-form [aria-invalid=true]{border-color:#ff8175}
 .budget p#budget-note{color:var(--muted)}

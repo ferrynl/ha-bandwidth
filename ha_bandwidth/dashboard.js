@@ -195,7 +195,18 @@ const translations = new Map([
   ["Kies een heel aantal dagen van {min} tot en met {max}.",["Choose a whole number of days from {min} to {max}.","Elige un número entero de días de {min} a {max}.","Wähle eine ganze Zahl von Tagen zwischen {min} und {max}."]],
   ["Bevestig eerst dat je oudere metingen wilt verwijderen.",["First confirm that you want to delete older measurements.","Confirma primero que quieres eliminar las mediciones más antiguas.","Bestätige zuerst, dass du ältere Messwerte löschen möchtest."]],
   ["Opslaan is mislukt. Probeer het opnieuw.",["Saving failed. Try again.","No se pudo guardar. Inténtalo de nuevo.","Speichern fehlgeschlagen. Versuche es erneut."]],
-  ["Stel data_budget_gb in bij Configuratie om je databundel te volgen.",["Set data_budget_gb under Configuration to track your data plan.","Define data_budget_gb en Configuración para seguir tu tarifa de datos.","Lege data_budget_gb unter Konfiguration fest, um dein Datenvolumen zu verfolgen."]],
+  ["Databudget instellen",["Set up data budget","Configurar presupuesto de datos","Datenbudget einrichten"]],
+  ["Volg je maandbundel. Zet de limiet op 0 om het budget uit te zetten.",["Track your monthly data plan. Set the limit to 0 to turn the budget off.","Sigue tu tarifa mensual. Pon el límite en 0 para desactivar el presupuesto.","Verfolge dein Monatsvolumen. Setze das Limit auf 0, um das Budget auszuschalten."]],
+  ["Limiet (GB)",["Limit (GB)","Límite (GB)","Limit (GB)"]],
+  ["Bron",["Source","Fuente","Quelle"]],
+  ["Dag waarop je cyclus begint (1 tot en met 28)",["Day your cycle starts (1 to 28)","Día en que empieza tu ciclo (1 a 28)","Tag, an dem dein Zyklus beginnt (1 bis 28)"]],
+  ["Waarschuwen bij (% van de limiet)",["Warn at (% of the limit)","Avisar al (% del límite)","Warnen bei (% des Limits)"]],
+  ["Vul een limiet in van 0 tot en met 1.000.000 gigabyte.",["Enter a limit from 0 to 1,000,000 gigabytes.","Introduce un límite de 0 a 1.000.000 gigabytes.","Gib ein Limit von 0 bis 1.000.000 Gigabyte ein."]],
+  ["Kies een dag van 1 tot en met 28.",["Choose a day from 1 to 28.","Elige un día del 1 al 28.","Wähle einen Tag von 1 bis 28."]],
+  ["Kies een percentage van 1 tot en met 99.",["Choose a percentage from 1 to 99.","Elige un porcentaje del 1 al 99.","Wähle einen Prozentsatz von 1 bis 99."]],
+  ["Opgeslagen. Het databudget staat uit.",["Saved. The data budget is off.","Guardado. El presupuesto de datos está desactivado.","Gespeichert. Das Datenbudget ist ausgeschaltet."]],
+  ["Opgeslagen. Het databudget is bijgewerkt.",["Saved. The data budget has been updated.","Guardado. El presupuesto de datos se ha actualizado.","Gespeichert. Das Datenbudget wurde aktualisiert."]],
+  ["Stel een limiet in op de pagina Instellingen om je databundel te volgen.",["Set a limit on the Settings page to track your data plan.","Define un límite en la página Ajustes para seguir tu tarifa de datos.","Lege auf der Seite Einstellungen ein Limit fest, um dein Datenvolumen zu verfolgen."]],
   ["Databudget kalibreren",["Calibrate data budget","Calibrar el presupuesto de datos","Datenbudget abgleichen"]],
   ["Begon je met de app midden in een cyclus, of loopt de telling achter op je provider? Vul in wat je provider nu aan verbruik meldt. De app telt de rest van de cyclus zelf door.",["Did you start the app partway through a cycle, or is the count behind your provider's? Enter the usage your provider reports now. The app counts the rest of the cycle itself.","¿Empezaste a usar la app a mitad de un ciclo, o el recuento va por detrás de tu proveedor? Introduce el consumo que indica ahora tu proveedor. La app cuenta el resto del ciclo por sí sola.","Hast du die App mitten in einem Zeitraum gestartet, oder liegt die Zählung hinter deinem Anbieter zurück? Trage ein, was dein Anbieter jetzt als Verbrauch meldet. Den Rest des Zeitraums zählt die App selbst."]],
   ["Verbruikt volgens je provider (GB)",["Used according to your provider (GB)","Consumido según tu proveedor (GB)","Verbraucht laut deinem Anbieter (GB)"]],
@@ -948,7 +959,7 @@ async function loadBudget() {
       el("budget-title").textContent = t("Databudget");
       el("budget-state").textContent = t("Uitgeschakeld");
       el("budget-progress").hidden = true;
-      el("budget-used").textContent = t("Stel data_budget_gb in bij Configuratie om je databundel te volgen.");
+      el("budget-used").textContent = t("Stel een limiet in op de pagina Instellingen om je databundel te volgen.");
       for (const id of ["budget-cycle", "budget-projection", "budget-note"]) el(id).textContent = "";
       return;
     }
@@ -1266,6 +1277,67 @@ el("retention-form").addEventListener("submit", async event => {
 });
 
 loadRetention();
+
+const budgetConfig = {state: null};
+
+function showBudgetConfig(state) {
+  budgetConfig.state = state;
+  el("budget-limit").value = String(state.limit_gb);
+  el("budget-source").value = state.source;
+  el("budget-reset-day").value = String(state.reset_day);
+  el("budget-warn").value = String(state.warn_percent);
+}
+
+async function loadBudgetConfig() {
+  if (embeddedCard) return;
+  try {
+    const response = await fetch("./api/settings/budget");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showBudgetConfig(await response.json());
+  } catch {
+    el("budget-settings-card").hidden = true;
+  }
+}
+
+el("budget-config-form").addEventListener("input", () => { el("budget-config-status").textContent = ""; });
+el("budget-config-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = el("budget-config-status");
+  const limit = el("budget-limit").value.trim() === "" ? NaN : Number(el("budget-limit").value);
+  const day = Number(el("budget-reset-day").value);
+  const warn = Number(el("budget-warn").value);
+  if (!Number.isFinite(limit) || limit < 0 || limit > 1000000) {
+    status.textContent = t("Vul een limiet in van 0 tot en met 1.000.000 gigabyte.");
+    return;
+  }
+  if (el("budget-reset-day").value.trim() === "" || !Number.isInteger(day) || day < 1 || day > 28) {
+    status.textContent = t("Kies een dag van 1 tot en met 28.");
+    return;
+  }
+  if (el("budget-warn").value.trim() === "" || !Number.isInteger(warn) || warn < 1 || warn > 99) {
+    status.textContent = t("Kies een percentage van 1 tot en met 99.");
+    return;
+  }
+  el("budget-config-save").disabled = true;
+  try {
+    const response = await fetch("./api/settings/budget-config", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"},
+      body: JSON.stringify({limit_gb: limit, source: el("budget-source").value, reset_day: day, warn_percent: warn}),
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    showBudgetConfig(data);
+    status.textContent = data.limit_gb > 0 ? t("Opgeslagen. Het databudget is bijgewerkt.") : t("Opgeslagen. Het databudget staat uit.");
+    loadBudget();
+    loadCalibration();
+  } catch {
+    status.textContent = t("Opslaan is mislukt. Probeer het opnieuw.");
+  } finally {
+    el("budget-config-save").disabled = false;
+  }
+});
+loadBudgetConfig();
 
 const calibration = {status: null};
 const signedAmount = amount => (amount >= 0 ? "+" : "−") + bytes(Math.abs(amount));

@@ -184,6 +184,26 @@
         <p id="retention-status" role="status"></p>
       </form>
     </section>
+    <section class="card" id="budget-settings-card" aria-labelledby="budget-settings-title">
+      <h2 id="budget-settings-title">Databudget instellen</h2>
+      <p id="budget-settings-intro">Volg je maandbundel. Zet de limiet op 0 om het budget uit te zetten.</p>
+      <form id="budget-config-form" novalidate>
+        <label for="budget-limit">Limiet (GB)</label>
+        <input id="budget-limit" type="number" inputmode="decimal" min="0" max="1000000" step="any" required aria-describedby="budget-config-status">
+        <label for="budget-source">Bron</label>
+        <select id="budget-source">
+          <option value="modem">Modem</option>
+          <option value="openwrt">OpenWrt WAN</option>
+          <option value="host">Server</option>
+        </select>
+        <label for="budget-reset-day">Dag waarop je cyclus begint (1 tot en met 28)</label>
+        <input id="budget-reset-day" type="number" inputmode="numeric" min="1" max="28" step="1" required>
+        <label for="budget-warn">Waarschuwen bij (% van de limiet)</label>
+        <input id="budget-warn" type="number" inputmode="numeric" min="1" max="99" step="1" required>
+        <button id="budget-config-save" type="submit">Opslaan</button>
+        <p id="budget-config-status" role="status"></p>
+      </form>
+    </section>
     <section class="card" id="calibration-card" aria-labelledby="calibration-title" hidden>
       <h2 id="calibration-title">Databudget kalibreren</h2>
       <p id="calibration-intro">Begon je met de app midden in een cyclus, of loopt de telling achter op je provider? Vul in wat je provider nu aan verbruik meldt. De app telt de rest van de cyclus zelf door.</p>
