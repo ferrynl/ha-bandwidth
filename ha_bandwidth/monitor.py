@@ -3,7 +3,6 @@ import ipaddress
 import http.client
 import json
 import logging
-import math
 from logging.handlers import RotatingFileHandler
 import os
 import re
@@ -23,12 +22,14 @@ from urllib.parse import parse_qs, urlsplit
 
 from zoneinfo import ZoneInfo
 
+import app_settings
+from app_settings import retention_days
 from migrations import migrate
 from csv_export import CSV_COLUMNS, csv_safe, csv_text
 from ipinfo import fetch_ipinfo as lookup_ipinfo, public_ip, stored_ipinfo
 from periods import period_bounds, previous_period, previous_totals
 from topology import router_topology
-from budget import SOURCES, BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
+from budget import BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
 from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
@@ -50,17 +51,11 @@ ROUTER_LINKS = {}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 
 
-def retention_days(options):
-    """Het aantal lokale kalenderdagen dat metingen bewaard blijven (30 tot en met 3650, standaard 400)."""
-    try:
-        days = int(options.get("retention_days", 400))
-    except (TypeError, ValueError):
-        return 400
-    return min(3650, max(30, days))
+
 
 
 RETENTION_DAYS = retention_days(SETTINGS)
-RETENTION_RANGE = (30, 3650)
+RETENTION_RANGE = app_settings.RETENTION_RANGE
 SETTINGS_LOCK = threading.Lock()
 
 
@@ -69,35 +64,8 @@ def app_settings_file():
 
 
 def load_app_settings():
-    """Instellingen die op de pagina Instellingen zijn opgeslagen. Ongeldig of afwezig geeft een lege lijst."""
-    try:
-        data = json.loads(app_settings_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    settings = {}
-    days = data.get("retention_days")
-    if isinstance(days, int) and not isinstance(days, bool) and RETENTION_RANGE[0] <= days <= RETENTION_RANGE[1]:
-        settings["retention_days"] = days
-    saved = data.get("budget")
-    if isinstance(saved, dict):
-        limit, source = saved.get("limit_gb"), saved.get("source")
-        day, warn = saved.get("reset_day"), saved.get("warn_percent")
-        whole = lambda value, low, high: isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
-        if (isinstance(limit, (int, float)) and not isinstance(limit, bool) and math.isfinite(limit) and 0 <= limit <= 1_000_000
-                and source in SOURCES and whole(day, 1, 28) and whole(warn, 1, 99)):
-            settings["budget"] = {"limit_gb": limit, "source": source, "reset_day": day, "warn_percent": warn}
-    calibration = data.get("budget_calibration")
-    if isinstance(calibration, dict):
-        offset = calibration.get("offset")
-        try:
-            cycle = date.fromisoformat(calibration["cycle_start"]).isoformat()
-        except (KeyError, TypeError, ValueError):
-            cycle = None
-        if cycle and isinstance(offset, int) and not isinstance(offset, bool) and abs(offset) <= 10**15:
-            settings["budget_calibration"] = {"cycle_start": cycle, "offset": offset}
-    return settings
+    """Instellingen die op de pagina Instellingen zijn opgeslagen."""
+    return app_settings.load(app_settings_file())
 
 
 def apply_app_settings():
@@ -107,11 +75,7 @@ def apply_app_settings():
 
 
 def save_app_settings(settings):
-    """Schrijf atomair, zodat een onderbreking nooit een half bestand achterlaat."""
-    target = app_settings_file()
-    staging = target.with_suffix(".tmp")
-    staging.write_text(json.dumps(settings), encoding="utf-8")
-    staging.replace(target)
+    app_settings.save(app_settings_file(), settings)
 
 
 def stored_days():
@@ -383,11 +347,7 @@ BUDGET_LABELS = {"openwrt": "OpenWrt WAN", "host": "Server"}
 
 def budget_options():
     """De budgetopties: de pagina Instellingen gaat voor op Configuratie."""
-    saved = load_app_settings().get("budget")
-    if not saved:
-        return SETTINGS
-    return {**SETTINGS, "data_budget_gb": saved["limit_gb"], "data_budget_source": saved["source"],
-            "data_budget_reset_day": saved["reset_day"], "data_budget_warn_percent": saved["warn_percent"]}
+    return app_settings.budget_options(SETTINGS, load_app_settings().get("budget"))
 
 
 def budget_state():
@@ -402,23 +362,12 @@ def budget_state():
 
 def change_budget(body):
     """Valideer en bewaar de budgetinstellingen. Een limiet van 0 zet het budget uit."""
-    if not isinstance(body, dict):
-        return 400, {"error": "Ongeldige instellingen."}
-    limit, source = body.get("limit_gb"), body.get("source")
-    day, warn = body.get("reset_day"), body.get("warn_percent")
-    whole = lambda value, low, high: isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
-    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 <= limit <= 1_000_000:
-        return 400, {"error": "Vul een limiet in van 0 tot en met 1.000.000 gigabyte."}
-    if source not in SOURCES:
-        return 400, {"error": "Kies een geldige bron."}
-    if not whole(day, 1, 28):
-        return 400, {"error": "Kies een dag van 1 tot en met 28."}
-    if not whole(warn, 1, 99):
-        return 400, {"error": "Kies een percentage van 1 tot en met 99."}
+    values, error = app_settings.clean_budget(body)
+    if error:
+        return 400, {"error": error}
     with SETTINGS_LOCK:
-        save_app_settings({**load_app_settings(), "budget": {
-            "limit_gb": limit, "source": source, "reset_day": day, "warn_percent": warn}})
-    logging.info("Databudget ingesteld: %s GB, bron %s", limit, source)
+        save_app_settings({**load_app_settings(), "budget": values})
+    logging.info("Databudget ingesteld: %s GB, bron %s", values["limit_gb"], values["source"])
     return 200, budget_state()
 
 
@@ -439,13 +388,10 @@ def calibrate_budget(body, now=None):
     config = budget_settings(budget_options())
     if config is None:
         return 400, {"error": "Het databudget staat uit. Stel eerst een limiet in."}
-    if not isinstance(body, dict) or "used_gb" not in body:
-        return 400, {"error": "Vul het verbruik in gigabytes in."}
-    value = body["used_gb"]
+    value, error = app_settings.clean_used_gb(body)
+    if error:
+        return 400, {"error": error}
     clear = value is None
-    if not clear and (isinstance(value, bool) or not isinstance(value, (int, float))
-                      or not math.isfinite(value) or not 0 <= value <= 1_000_000):
-        return 400, {"error": "Vul een getal in van 0 tot en met 1.000.000 gigabyte."}
     with SETTINGS_LOCK:
         settings = load_app_settings()
         if clear:
