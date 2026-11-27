@@ -90,7 +90,7 @@ Onder download, upload en totaal staat het verschil met de vorige dag, week, maa
 
 ## Databudget
 
-Stel onder **HA-Bandwidth → Configuratie** het budget in van je databundel. Zonder `data_budget_gb` (of met 0) is het budget uit.
+Stel het budget van je databundel in op de pagina **Instellingen** van het dashboard, onder **Databudget instellen**. Een limiet van 0 zet het budget uit. Wat je daar opslaat gaat voor op de opties onder **HA-Bandwidth → Configuratie**, die als beginwaarde blijven werken. Zonder `data_budget_gb` (of met 0) en zonder opgeslagen instelling is het budget uit. Wijzig je de dag waarop de cyclus begint, dan vervalt een eerder ingevulde correctie.
 
 | Optie | Betekenis |
 | --- | --- |

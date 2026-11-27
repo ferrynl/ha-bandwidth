@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
-from budget import BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
+from budget import SOURCES, BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
 from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
@@ -77,6 +77,14 @@ def load_app_settings():
     days = data.get("retention_days")
     if isinstance(days, int) and not isinstance(days, bool) and RETENTION_RANGE[0] <= days <= RETENTION_RANGE[1]:
         settings["retention_days"] = days
+    saved = data.get("budget")
+    if isinstance(saved, dict):
+        limit, source = saved.get("limit_gb"), saved.get("source")
+        day, warn = saved.get("reset_day"), saved.get("warn_percent")
+        whole = lambda value, low, high: isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+        if (isinstance(limit, (int, float)) and not isinstance(limit, bool) and math.isfinite(limit) and 0 <= limit <= 1_000_000
+                and source in SOURCES and whole(day, 1, 28) and whole(warn, 1, 99)):
+            settings["budget"] = {"limit_gb": limit, "source": source, "reset_day": day, "warn_percent": warn}
     calibration = data.get("budget_calibration")
     if isinstance(calibration, dict):
         offset = calibration.get("offset")
@@ -408,6 +416,47 @@ def alerts_today(now):
 BUDGET_LABELS = {"openwrt": "OpenWrt WAN", "host": "Server"}
 
 
+def budget_options():
+    """De budgetopties: de pagina Instellingen gaat voor op Configuratie."""
+    saved = load_app_settings().get("budget")
+    if not saved:
+        return SETTINGS
+    return {**SETTINGS, "data_budget_gb": saved["limit_gb"], "data_budget_source": saved["source"],
+            "data_budget_reset_day": saved["reset_day"], "data_budget_warn_percent": saved["warn_percent"]}
+
+
+def budget_state():
+    """De geldende budgetinstellingen voor het formulier. Een limiet van 0 betekent uit."""
+    config = budget_settings(budget_options())
+    return {"limit_gb": config["limit"] / BYTES_PER_GB if config else 0,
+            "source": config["source"] if config else "modem",
+            "reset_day": config["reset_day"] if config else 1,
+            "warn_percent": config["warn_percent"] if config else 80,
+            "from_settings_page": "budget" in load_app_settings()}
+
+
+def change_budget(body):
+    """Valideer en bewaar de budgetinstellingen. Een limiet van 0 zet het budget uit."""
+    if not isinstance(body, dict):
+        return 400, {"error": "Ongeldige instellingen."}
+    limit, source = body.get("limit_gb"), body.get("source")
+    day, warn = body.get("reset_day"), body.get("warn_percent")
+    whole = lambda value, low, high: isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 <= limit <= 1_000_000:
+        return 400, {"error": "Vul een limiet in van 0 tot en met 1.000.000 gigabyte."}
+    if source not in SOURCES:
+        return 400, {"error": "Kies een geldige bron."}
+    if not whole(day, 1, 28):
+        return 400, {"error": "Kies een dag van 1 tot en met 28."}
+    if not whole(warn, 1, 99):
+        return 400, {"error": "Kies een percentage van 1 tot en met 99."}
+    with SETTINGS_LOCK:
+        save_app_settings({**load_app_settings(), "budget": {
+            "limit_gb": limit, "source": source, "reset_day": day, "warn_percent": warn}})
+    logging.info("Databudget ingesteld: %s GB, bron %s", limit, source)
+    return 200, budget_state()
+
+
 def measured_budget_bytes(config, start, end):
     """De gemeten bytes en het aantal meetrijen van de gekozen bron in een cyclus."""
     with closing(database()) as db:
@@ -422,9 +471,9 @@ def calibrate_budget(body, now=None):
     Body: {"used_gb": 37.5} stelt in, {"used_gb": null} wist. Geeft (status, antwoord) terug.
     """
     now = now or datetime.now(ZONE)
-    config = budget_settings(SETTINGS)
+    config = budget_settings(budget_options())
     if config is None:
-        return 400, {"error": "Het databudget staat uit. Stel eerst data_budget_gb in bij Configuratie."}
+        return 400, {"error": "Het databudget staat uit. Stel eerst een limiet in."}
     if not isinstance(body, dict) or "used_gb" not in body:
         return 400, {"error": "Vul het verbruik in gigabytes in."}
     value = body["used_gb"]
@@ -448,7 +497,7 @@ def calibrate_budget(body, now=None):
 
 def budget_status(now=None):
     """Het huidige databudget, of None als het budget is uitgeschakeld."""
-    config = budget_settings(SETTINGS)
+    config = budget_settings(budget_options())
     if config is None:
         return None
     now = now or datetime.now(ZONE)
@@ -888,6 +937,9 @@ class Dashboard(BaseHTTPRequestHandler):
             payload = {"enabled": False} if status is None else dict(status, enabled=True)
             self.reply(json.dumps(payload).encode(), "application/json")
             return
+        if url.path == "/api/settings/budget":
+            self.reply(json.dumps(budget_state()).encode(), "application/json")
+            return
         if url.path == "/api/live":
             self.reply(json.dumps(LIVE.snapshot()).encode(), "application/json")
             return
@@ -1000,7 +1052,8 @@ class Dashboard(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlsplit(self.path).path
         # Een eigen header dwingt een CORS-preflight af, zodat andere websites hier niet naartoe kunnen posten.
-        change = {"/api/settings": change_retention, "/api/settings/budget": calibrate_budget}.get(path)
+        change = {"/api/settings": change_retention, "/api/settings/budget": calibrate_budget,
+                  "/api/settings/budget-config": change_budget}.get(path)
         header = "X-HA-Bandwidth-Settings" if change else "X-HA-Bandwidth-Restore"
         if self.client_address[0] != "172.30.32.2" or self.headers.get(header) != "1":
             self.send_error(403)
