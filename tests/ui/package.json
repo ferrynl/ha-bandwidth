@@ -1,0 +1,7 @@
+{
+  "name": "ha-bandwidth-ui-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test --test-force-exit"},
+  "devDependencies": {"jsdom": "31.0.1"}
+}

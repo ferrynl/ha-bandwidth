@@ -41,5 +41,11 @@ jobs:
         run: python -m unittest discover -s ha_bandwidth -p 'test_*.py' -v
       - name: Check JavaScript module syntax
         run: node --input-type=module --check < ha_bandwidth/dashboard.js
+      - name: Install dashboard test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: tests/ui
+      - name: Run dashboard UI tests
+        run: npm test
+        working-directory: tests/ui
       - name: Build and smoke-test the add-on
         run: bash .github/scripts/smoke-test.sh
