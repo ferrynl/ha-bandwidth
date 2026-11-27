@@ -1,6 +1,4 @@
 import concurrent.futures
-import csv
-import io
 import ipaddress
 import http.client
 import json
@@ -20,16 +18,20 @@ from contextlib import closing
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urlsplit
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.error import URLError
+from urllib.parse import parse_qs, urlsplit
+
 from zoneinfo import ZoneInfo
 
+from csv_export import CSV_COLUMNS, csv_safe, csv_text
+from ipinfo import fetch_ipinfo as lookup_ipinfo, public_ip, stored_ipinfo
+from periods import period_bounds, previous_period, previous_totals
+from topology import router_topology
 from budget import SOURCES, BYTES_PER_GB, cycle_bounds, settings as budget_settings, status as evaluate_budget
 from live_monitor import LiveMonitor
 from destinations import AppDestinations, NetworkCapture, PROTOCOLS, bridge_apps
 from modem import DirectZyxel, modem_reading
-from openwrt import NoRedirect, OpenWrt, hosts_by_ip
+from openwrt import OpenWrt, hosts_by_ip
 from ha_dashboard import provision_dashboard
 from ha_mqtt import budget_entities, publish as publish_to_ha, setup_status, spike_entities
 from storage_backup import MAX_BACKUP_SIZE, restore, snapshot
@@ -344,15 +346,6 @@ def record(now, rows, prune, destinations=()):
             db.execute("DELETE FROM traffic_alerts WHERE timestamp < ?", (cutoff,))
 
 
-CSV_COLUMNS = ("bucket", "kind", "source", "label", "download_bytes", "upload_bytes", "total_bytes")
-
-
-def csv_safe(value):
-    """Voorkom dat een spreadsheet een apparaatnaam als formule uitvoert (CSV-injectie)."""
-    value = str(value or "")
-    return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
-
-
 def export_csv(day, period, kind, source):
     """De getoonde periode als CSV, in dezelfde indeling als de grafiek: uur, dag of maand per bron."""
     start, end = period_bounds(day, period)
@@ -365,13 +358,7 @@ def export_csv(day, period, kind, source):
         params.append(source)
     with closing(database()) as db:
         rows = db.execute(sql + " GROUP BY bucket, kind, source ORDER BY bucket, kind, source", params).fetchall()
-    out = io.StringIO()
-    writer = csv.writer(out)
-    writer.writerow(CSV_COLUMNS)
-    for row in rows:
-        writer.writerow([row["bucket"], row["kind"], csv_safe(row["source"]), csv_safe(row["label"]),
-                         row["rx"], row["tx"], row["rx"] + row["tx"]])
-    return "\ufeff" + out.getvalue()  # Met BOM, zodat Excel de UTF-8-tekens goed leest.
+    return csv_text(rows)
 
 
 def store_alerts(alerts):
@@ -691,72 +678,6 @@ def collect():
             time.sleep(max(0, INTERVAL - (time.monotonic() - started)))
 
 
-def period_bounds(day, period):
-    if period == "day":
-        return day, day + timedelta(days=1)
-    if period == "week":
-        start = day - timedelta(days=day.weekday())
-        return start, start + timedelta(days=7)
-    if period == "month":
-        start = day.replace(day=1)
-        return start, (start + timedelta(days=32)).replace(day=1)
-    return day.replace(month=1, day=1), date(day.year + 1, 1, 1)
-
-
-def previous_period(day, period, now):
-    """Bepaal de vorige periode. Loopt de gekozen periode nog, dan stopt de vorige op hetzelfde moment.
-
-    De uren zijn lokale klokuren, zoals in de tabel `traffic`. Een zomertijdwissel
-    verschuift de vergelijking hooguit een uur.
-    """
-    start, end = period_bounds(day, period)
-    before_start, before_end = period_bounds(start - timedelta(days=1), period)
-    midnight = datetime.min.time()
-    first_hour = datetime.combine(before_start, midnight)
-    stop = datetime.combine(before_end, midnight)
-    partial = start <= now.date() < end
-    if partial:
-        this_hour = now.replace(tzinfo=None, minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        stop = min(stop, first_hour + (this_hour - datetime.combine(start, midnight)))
-    return before_start, before_end, first_hour, stop, partial
-
-
-def previous_totals(db, day, period, kind, source, now, first):
-    before_start, before_end, first_hour, stop, partial = previous_period(day, period, now)
-    sql = "SELECT COALESCE(SUM(rx), 0) AS rx, COALESCE(SUM(tx), 0) AS tx, COUNT(*) AS rows " \
-          "FROM traffic WHERE hour >= ? AND hour < ? AND kind = ?"
-    params = [first_hour.strftime("%Y-%m-%dT%H"), stop.strftime("%Y-%m-%dT%H"), kind]
-    if source:
-        sql += " AND source = ?"
-        params.append(source)
-    row = db.execute(sql, params).fetchone()
-    # De vorige periode is alleen vergelijkbaar als de metingen er helemaal in vielen.
-    comparable = bool(first) and first[:13] <= params[0] and row["rows"] > 0 and row["rx"] + row["tx"] > 0
-    return {
-        "start": before_start.isoformat(), "end": (before_end - timedelta(days=1)).isoformat(),
-        "rx": row["rx"], "tx": row["tx"], "partial": partial, "comparable": comparable,
-    }
-
-
-def router_topology(hosts, links, router_url):
-    devices = {}
-    try:
-        router = str(ipaddress.ip_address(urlsplit(router_url).hostname))
-    except ValueError:
-        router = ""
-    router_mac = hosts.get(router, {}).get("mac")
-    for ip, host in hosts.items():
-        mac = host["mac"]
-        if ip == router or (router_mac and mac == router_mac):
-            continue
-        device = devices.setdefault(mac or ip, {"name": host["name"], "ips": [], **links.get(mac, {})})
-        device["ips"].append(ip)
-    for mac, link in links.items():
-        if mac != router_mac:
-            devices.setdefault(mac, {"name": "", "ips": [], **link})
-    return [dict(device, source=key) for key, device in devices.items()]
-
-
 def report(day, period, kind, source, now=None):
     router_hosts = ROUTER_HOSTS
     now = now or datetime.now(ZONE)
@@ -847,62 +768,19 @@ def report(day, period, kind, source, now=None):
     }
 
 
-def public_ip(value):
-    try:
-        address = ipaddress.ip_address(value)
-    except ValueError:
-        return None
-    if getattr(address, "scope_id", None) or not address.is_global or address.is_multicast or address.is_reserved:
-        return None
-    return str(address)
-
-
-def stored_ipinfo(db, addresses):
-    if not addresses:
-        return {}
-    placeholders = ", ".join("?" for _ in addresses)
-    rows = db.execute(
-        f"SELECT ip, asn, as_name, as_domain FROM ipinfo_cache WHERE ip IN ({placeholders})",
-        tuple(addresses),
-    )
-    return {row["ip"]: {key: row[key] for key in ("asn", "as_name", "as_domain")} for row in rows}
-
-
 def ipinfo_lookup(address):
     # Recheck under the lock so simultaneous clicks only make one request.
     with IPINFO_LOCK, closing(database()) as db:
         cached = stored_ipinfo(db, (address,)).get(address)
         if cached is not None:
             return cached
-        details = fetch_ipinfo(address)
+        details = lookup_ipinfo(SETTINGS.get("ipinfo_token", ""), address)
         if any(details.values()):
             with db:
                 db.execute("INSERT INTO ipinfo_cache VALUES (?, ?, ?, ?)", (
                     address, *(details.get(key, "") for key in ("asn", "as_name", "as_domain"))
                 ))
         return details
-
-
-def fetch_ipinfo(address):
-    token = SETTINGS.get("ipinfo_token", "").strip()
-    if not token:
-        raise ValueError("Vul ipinfo_token in bij HA-Bandwidth → Configuratie.")
-    query = urlencode({"token": token})
-    opener = build_opener(ProxyHandler({}), NoRedirect())
-    request = Request(f"https://api.ipinfo.io/lite/{address}?{query}", headers={"Accept": "application/json"})
-    try:
-        with opener.open(request, timeout=5) as response:
-            data = json.loads(response.read(16384))
-    except HTTPError as error:
-        if error.code in (401, 403):
-            raise ValueError("IPinfo accepteert het ingestelde token niet.") from None
-        raise ValueError(f"IPinfo gaf HTTP {error.code}.") from None
-    except (OSError, ValueError, http.client.HTTPException):
-        raise ValueError("IPinfo is tijdelijk niet bereikbaar.") from None
-    if not isinstance(data, dict):
-        raise ValueError("IPinfo gaf een onverwacht antwoord.")
-    return {key: data[key][:250] for key in ("asn", "as_name", "as_domain")
-            if isinstance(data.get(key), str)}
 
 
 class Dashboard(BaseHTTPRequestHandler):
