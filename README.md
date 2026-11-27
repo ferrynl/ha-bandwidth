@@ -149,6 +149,14 @@ automation:
 
 Een piek is een statistische aanwijzing en geen bewijs van misbruik. De drempels zijn ongewijzigd.
 
+## Uurdetail samenvatten
+
+Standaard bewaart de app metingen per uur. Op de pagina **Instellingen** onder **Uurdetail** kun je instellen na hoeveel dagen oude uurmetingen tot één dagtotaal per bron worden samengevat (30 tot en met 3650 dagen, 0 betekent altijd uurdetail bewaren, de standaard). Zo blijven de database en de back-ups klein bij een lange bewaartijd.
+
+- Totalen en de grafieken per dag, week, maand en jaar veranderen niet, en de CSV-export geeft dezelfde totalen. Alleen de uurweergave van een oude dag toont één blok.
+- Samenvatten is definitief: het uurdetail komt niet terug. Het dashboard vraagt daarom eerst om een vinkje als er oude dagen met uurdetail zijn. Opslaan zelf doet niets. Het samenvatten gebeurt bij de eerstvolgende opruiming (na middernacht of bij een herstart).
+- Download eerst een back-up als je het uurdetail nog nodig hebt.
+
 ## Bewaartijd
 
 Je stelt hoeveel lokale kalenderdagen metingen, bestemmingen van apps en verkeerspieken bewaard blijven in op de pagina **Instellingen** van het dashboard, onder **Bewaartijd**. Toegestaan is 30 tot en met 3650 dagen, standaard 400. De app ruimt op bij elke start en na middernacht.

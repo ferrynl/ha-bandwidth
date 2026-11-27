@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 
 import app_settings
 from app_settings import retention_days
+import rollup
 from migrations import migrate
 from csv_export import CSV_COLUMNS, csv_safe, csv_text
 from ipinfo import fetch_ipinfo as lookup_ipinfo, public_ip, stored_ipinfo
@@ -55,6 +56,7 @@ PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 
 
 RETENTION_DAYS = retention_days(SETTINGS)
+HOURLY_DAYS = 0
 RETENTION_RANGE = app_settings.RETENTION_RANGE
 SETTINGS_LOCK = threading.Lock()
 
@@ -70,8 +72,10 @@ def load_app_settings():
 
 def apply_app_settings():
     """Laat de pagina Instellingen voorgaan op de optie in Configuratie."""
-    global RETENTION_DAYS
-    RETENTION_DAYS = retention_days({**SETTINGS, **load_app_settings()})
+    global RETENTION_DAYS, HOURLY_DAYS
+    saved = load_app_settings()
+    RETENTION_DAYS = retention_days({**SETTINGS, **saved})
+    HOURLY_DAYS = app_settings.hourly_days(saved)
 
 
 def save_app_settings(settings):
@@ -286,6 +290,8 @@ def record(now, rows, prune, destinations=()):
             db.execute("DELETE FROM traffic WHERE hour < ?", (cutoff,))
             db.execute("DELETE FROM app_destinations WHERE day < ?", (cutoff,))
             db.execute("DELETE FROM traffic_alerts WHERE timestamp < ?", (cutoff,))
+            if HOURLY_DAYS:
+                rollup.summarize(db, (now.date() - timedelta(days=HOURLY_DAYS)).isoformat())
 
 
 def export_csv(day, period, kind, source):
@@ -343,6 +349,37 @@ def alerts_today(now):
 
 
 BUDGET_LABELS = {"openwrt": "OpenWrt WAN", "host": "Server"}
+
+
+def hourly_cutoff(days=None, now=None):
+    days = HOURLY_DAYS if days is None else days
+    return ((now or datetime.now(ZONE)).date() - timedelta(days=days)).isoformat()
+
+
+def hourly_state():
+    with closing(database()) as db:
+        pending = rollup.detail_days(db, hourly_cutoff()) if HOURLY_DAYS else 0
+    return {"hourly_days": HOURLY_DAYS, "min": app_settings.HOURLY_RANGE[0], "max": app_settings.HOURLY_RANGE[1],
+            "retention_days": RETENTION_DAYS, "stored_days": stored_days(), "pending_days": pending}
+
+
+def change_hourly(body):
+    """Stel in na hoeveel dagen uurmetingen tot dagtotalen worden samengevat (0 = nooit)."""
+    days = body.get("hourly_days") if isinstance(body, dict) else None
+    low, high = app_settings.HOURLY_RANGE
+    if days != 0 and not app_settings.whole(days, low, high) or isinstance(days, bool):
+        return 400, {"error": f"Kies 0 of een heel aantal dagen van {low} tot en met {high}."}
+    with SETTINGS_LOCK:
+        if days:
+            with closing(database()) as db:
+                affected = rollup.detail_days(db, hourly_cutoff(days))
+            if affected and body.get("confirm") is not True:
+                return 409, {"error": "Het uurdetail van oudere dagen verdwijnt. Bevestig dat je dat wilt.",
+                             "affected_days": affected}
+        save_app_settings({**load_app_settings(), "hourly_days": days})
+        apply_app_settings()
+    logging.info("Uurdetail ingesteld op %s dagen", days)
+    return 200, hourly_state()
 
 
 def budget_options():
@@ -739,6 +776,9 @@ class Dashboard(BaseHTTPRequestHandler):
             payload = {"enabled": False} if status is None else dict(status, enabled=True)
             self.reply(json.dumps(payload).encode(), "application/json")
             return
+        if url.path == "/api/settings/hourly":
+            self.reply(json.dumps(hourly_state()).encode(), "application/json")
+            return
         if url.path == "/api/settings/budget":
             self.reply(json.dumps(budget_state()).encode(), "application/json")
             return
@@ -855,7 +895,8 @@ class Dashboard(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         # Een eigen header dwingt een CORS-preflight af, zodat andere websites hier niet naartoe kunnen posten.
         change = {"/api/settings": change_retention, "/api/settings/budget": calibrate_budget,
-                  "/api/settings/budget-config": change_budget}.get(path)
+                  "/api/settings/budget-config": change_budget,
+                  "/api/settings/hourly": change_hourly}.get(path)
         header = "X-HA-Bandwidth-Settings" if change else "X-HA-Bandwidth-Restore"
         if self.client_address[0] != "172.30.32.2" or self.headers.get(header) != "1":
             self.send_error(403)
