@@ -195,6 +195,16 @@ const translations = new Map([
   ["Kies een heel aantal dagen van {min} tot en met {max}.",["Choose a whole number of days from {min} to {max}.","Elige un número entero de días de {min} a {max}.","Wähle eine ganze Zahl von Tagen zwischen {min} und {max}."]],
   ["Bevestig eerst dat je oudere metingen wilt verwijderen.",["First confirm that you want to delete older measurements.","Confirma primero que quieres eliminar las mediciones más antiguas.","Bestätige zuerst, dass du ältere Messwerte löschen möchtest."]],
   ["Opslaan is mislukt. Probeer het opnieuw.",["Saving failed. Try again.","No se pudo guardar. Inténtalo de nuevo.","Speichern fehlgeschlagen. Versuche es erneut."]],
+  ["Uurdetail",["Hourly detail","Detalle por hora","Stundendetail"]],
+  ["Metingen worden per uur bewaard. Oude dagen kun je samenvatten tot één dagtotaal, zodat de database klein blijft. Totalen, grafieken per dag, week, maand en jaar en de CSV-export blijven kloppen.",["Measurements are kept per hour. You can summarize old days into one daily total to keep the database small. Totals, charts per day, week, month and year, and the CSV export stay correct.","Las mediciones se guardan por hora. Puedes resumir los días antiguos en un total diario para que la base de datos sea pequeña. Los totales, los gráficos por día, semana, mes y año y la exportación CSV siguen siendo correctos.","Messungen werden pro Stunde gespeichert. Alte Tage kannst du zu einer Tagessumme zusammenfassen, damit die Datenbank klein bleibt. Summen, Diagramme pro Tag, Woche, Monat und Jahr sowie der CSV-Export bleiben korrekt."]],
+  ["Uurdetail bewaren (dagen, 0 = altijd)",["Keep hourly detail (days, 0 = always)","Conservar el detalle por hora (días, 0 = siempre)","Stundendetail behalten (Tage, 0 = immer)"]],
+  ["Kies 0 of een heel aantal dagen van {min} tot en met {max}.",["Choose 0 or a whole number of days from {min} to {max}.","Elige 0 o un número entero de días de {min} a {max}.","Wähle 0 oder eine ganze Zahl von Tagen von {min} bis {max}."]],
+  ["Het uurdetail wordt altijd bewaard.",["Hourly detail is always kept.","El detalle por hora se conserva siempre.","Das Stundendetail wird immer behalten."]],
+  ["Uurdetail van dagen ouder dan {days} dagen wordt samengevat. Dat gebeurt bij de eerstvolgende opruiming. Nog samen te vatten: {pending} dagen.",["Hourly detail of days older than {days} days is summarized. This happens at the next cleanup. Still to summarize: {pending} days.","El detalle por hora de los días con más de {days} días se resume. Ocurre en la próxima limpieza. Pendientes de resumir: {pending} días.","Das Stundendetail von Tagen, die älter als {days} Tage sind, wird zusammengefasst. Das geschieht bei der nächsten Bereinigung. Noch zusammenzufassen: {pending} Tage."]],
+  ["Ik wil het uurdetail van {count} dagen definitief samenvatten tot dagtotalen.",["I want to permanently summarize the hourly detail of {count} days into daily totals.","Quiero resumir de forma definitiva el detalle por hora de {count} días en totales diarios.","Ich möchte das Stundendetail von {count} Tagen endgültig zu Tagessummen zusammenfassen."]],
+  ["Opgeslagen. Het uurdetail wordt altijd bewaard.",["Saved. Hourly detail is always kept.","Guardado. El detalle por hora se conserva siempre.","Gespeichert. Das Stundendetail wird immer behalten."]],
+  ["Opgeslagen. Oude dagen worden bij de eerstvolgende opruiming samengevat.",["Saved. Old days are summarized at the next cleanup.","Guardado. Los días antiguos se resumen en la próxima limpieza.","Gespeichert. Alte Tage werden bei der nächsten Bereinigung zusammengefasst."]],
+  ["Bevestig eerst dat je het uurdetail wilt samenvatten.",["First confirm that you want to summarize the hourly detail.","Primero confirma que quieres resumir el detalle por hora.","Bestätige zuerst, dass du das Stundendetail zusammenfassen möchtest."]],
   ["Databudget instellen",["Set up data budget","Configurar presupuesto de datos","Datenbudget einrichten"]],
   ["Volg je maandbundel. Zet de limiet op 0 om het budget uit te zetten.",["Track your monthly data plan. Set the limit to 0 to turn the budget off.","Sigue tu tarifa mensual. Pon el límite en 0 para desactivar el presupuesto.","Verfolge dein Monatsvolumen. Setze das Limit auf 0, um das Budget auszuschalten."]],
   ["Limiet (GB)",["Limit (GB)","Límite (GB)","Limit (GB)"]],
@@ -1277,6 +1287,84 @@ el("retention-form").addEventListener("submit", async event => {
 });
 
 loadRetention();
+
+const hourly = {state: null, affected: 0};
+
+function showHourly(state) {
+  hourly.state = state;
+  hourly.affected = 0;
+  const input = el("hourly-days");
+  input.min = 0;
+  input.max = state.max;
+  input.value = String(state.hourly_days);
+  input.setAttribute("aria-invalid", "false");
+  el("hourly-hint").textContent = state.hourly_days
+    ? t("Uurdetail van dagen ouder dan {days} dagen wordt samengevat. Dat gebeurt bij de eerstvolgende opruiming. Nog samen te vatten: {pending} dagen.", {days: state.hourly_days, pending: state.pending_days})
+    : t("Het uurdetail wordt altijd bewaard.");
+  showHourlyConfirm(0);
+}
+
+function showHourlyConfirm(count) {
+  hourly.affected = count;
+  el("hourly-confirm-row").hidden = !count;
+  if (!count) el("hourly-confirm").checked = false;
+  el("hourly-confirm-text").textContent = count ? t("Ik wil het uurdetail van {count} dagen definitief samenvatten tot dagtotalen.", {count}) : "";
+}
+
+async function loadHourly() {
+  if (embeddedCard) return;
+  try {
+    const response = await fetch("./api/settings/hourly");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showHourly(await response.json());
+  } catch {
+    el("hourly-card").hidden = true;
+  }
+}
+
+el("hourly-days").addEventListener("input", () => {
+  el("hourly-status").textContent = "";
+  showHourlyConfirm(0);
+});
+el("hourly-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = el("hourly-status");
+  if (!hourly.state) return;
+  const raw = el("hourly-days").value.trim();
+  const days = Number(raw);
+  const valid = raw !== "" && Number.isInteger(days) && (days === 0 || (days >= hourly.state.min && days <= hourly.state.max));
+  el("hourly-days").setAttribute("aria-invalid", String(!valid));
+  if (!valid) {
+    status.textContent = t("Kies 0 of een heel aantal dagen van {min} tot en met {max}.", hourly.state);
+    return;
+  }
+  if (hourly.affected && !el("hourly-confirm").checked) {
+    status.textContent = t("Bevestig eerst dat je het uurdetail wilt samenvatten.");
+    return;
+  }
+  el("hourly-save").disabled = true;
+  try {
+    const response = await fetch("./api/settings/hourly", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"},
+      body: JSON.stringify({hourly_days: days, confirm: el("hourly-confirm").checked}),
+    });
+    const data = await response.json();
+    if (response.status === 409 && data.affected_days) {
+      showHourlyConfirm(data.affected_days);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    showHourly(data);
+    status.textContent = data.hourly_days ? t("Opgeslagen. Oude dagen worden bij de eerstvolgende opruiming samengevat.")
+      : t("Opgeslagen. Het uurdetail wordt altijd bewaard.");
+  } catch {
+    status.textContent = t("Opslaan is mislukt. Probeer het opnieuw.");
+  } finally {
+    el("hourly-save").disabled = false;
+  }
+});
+loadHourly();
 
 const budgetConfig = {state: null};
 

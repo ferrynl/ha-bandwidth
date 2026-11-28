@@ -11,6 +11,7 @@ from datetime import date
 from budget import SOURCES
 
 RETENTION_RANGE = (30, 3650)
+HOURLY_RANGE = (30, 3650)  # 0 betekent: uurdetail altijd bewaren
 BUDGET_LIMIT_MAX = 1_000_000  # gigabyte
 
 
@@ -43,6 +44,8 @@ def load(path):
     settings = {}
     if whole(data.get("retention_days"), *RETENTION_RANGE):
         settings["retention_days"] = data["retention_days"]
+    if data.get("hourly_days") == 0 or whole(data.get("hourly_days"), *HOURLY_RANGE):
+        settings["hourly_days"] = data["hourly_days"]
     saved = data.get("budget")
     if isinstance(saved, dict) and clean_budget(saved)[1] is None:
         settings["budget"] = clean_budget(saved)[0]
@@ -90,6 +93,12 @@ def clean_used_gb(body):
     if value is not None and not number(value, 0, BUDGET_LIMIT_MAX):
         return None, "Vul een getal in van 0 tot en met 1.000.000 gigabyte."
     return value, None
+
+
+def hourly_days(options):
+    """Het aantal dagen uurdetail, of 0 om het altijd te bewaren."""
+    value = options.get("hourly_days", 0)
+    return value if value == 0 or whole(value, *HOURLY_RANGE) else 0
 
 
 def budget_options(options, saved):

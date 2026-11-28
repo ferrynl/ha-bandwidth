@@ -28,8 +28,9 @@ jobs:
           dockerfile = (root / "Dockerfile").read_text()
           copy = " ".join(line for line in dockerfile.splitlines() if line.startswith("COPY "))
           module = ast.parse((root / "monitor.py").read_text())
-          required = {item.module for item in module.body if isinstance(item, ast.ImportFrom)
-                      and item.module and (root / (item.module + ".py")).exists()}
+          names = {item.module for item in module.body if isinstance(item, ast.ImportFrom) and item.module}
+          names |= {alias.name for item in module.body if isinstance(item, ast.Import) for alias in item.names}
+          required = {name for name in names if (root / (name + ".py")).exists()}
           missing = sorted(name for name in required if name + ".py" not in copy)
           if missing:
               raise SystemExit("Missing runtime Python modules in Docker COPY: " + ", ".join(missing))

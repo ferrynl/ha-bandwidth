@@ -38,7 +38,8 @@ export async function mountPage(lang, routes) {
     if (options.method === "POST") posts.push({path, headers: options.headers, body: JSON.parse(options.body)});
     const reply = routes(path, options);
     if (reply === undefined) return {ok: true, json: async () => ({})};
-    if (reply === false) return {ok: false, json: async () => ({})};
+    if (reply === false) return {ok: false, status: 500, json: async () => ({})};
+    if (reply && reply.http) return {ok: false, status: reply.http, json: async () => reply.body};
     return {ok: true, json: async () => reply};
   };
   const module = await import(root + "dashboard.js?" + Math.random());

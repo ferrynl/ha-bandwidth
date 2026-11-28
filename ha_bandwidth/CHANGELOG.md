@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.0
+
+- Nieuw op de pagina **Instellingen**: **Uurdetail**. Vat uurmetingen ouder dan een instelbaar aantal dagen samen tot dagtotalen, zodat de database klein blijft bij een lange bewaartijd. Standaard uit. Totalen, grafieken per dag, week, maand en jaar en de CSV-export blijven kloppen. Het dashboard vraagt om bevestiging omdat het definitief is.
+- De controle in CI of alle modules in de Docker-image zitten kijkt nu ook naar gewone `import`-regels.
+
 ## 0.14.2
 
 - Intern: het lezen, valideren en opslaan van instellingen staat in een eigen module zonder globale toestand. Het gedrag is gelijk gebleven.
