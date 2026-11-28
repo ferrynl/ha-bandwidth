@@ -35,6 +35,8 @@ def groups(db, starts, end, include_ips):
     arguments = [starts[period] for period in PERIODS for _ in range(2)]
     columns = f"{sums}, MAX(label) AS label"
     where = "hour >= ? AND hour < ?"
+    # De SQL-tekst bestaat uit vaste stukken; alle waarden gaan als parameters mee.
+    # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
     rows = db.execute(
         f"SELECT kind, {columns} FROM traffic WHERE {where} GROUP BY kind",
         (*arguments, min(starts.values()), end),
@@ -42,6 +44,8 @@ def groups(db, starts, end, include_ips):
     empty = dict.fromkeys(f"{period}_{direction}" for period in PERIODS for direction in ("rx", "tx"))
     result = {key: (label, empty) for key, label in SOURCES.items()}
     result.update({row["kind"]: (SOURCES[row["kind"]], row) for row in rows if row["kind"] in SOURCES})
+    # De SQL-tekst bestaat uit vaste stukken; alle waarden gaan als parameters mee.
+    # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
     rows = db.execute(
         f"SELECT kind, source, {columns} FROM traffic WHERE {where} AND kind IN ({placeholders}) GROUP BY kind, source",
         (*arguments, min(starts.values()), end, *kinds),

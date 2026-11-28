@@ -111,6 +111,7 @@ class SupervisorConnectionTests(unittest.TestCase):
                     ha_dashboard.provision_dashboard()
         self.assertEqual(connect.call_count, 3)
         for call in connect.call_args_list:
+            # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
             self.assertEqual(call.args, ("ws://supervisor/core/websocket",))
             self.assertEqual(call.kwargs["http_no_proxy"], ["supervisor"])
             self.assertEqual(call.kwargs["redirect_limit"], 0)

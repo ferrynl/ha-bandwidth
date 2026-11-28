@@ -13,6 +13,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import monitor
+from local_http import local_request
 
 ZONE = ZoneInfo("Europe/Amsterdam")
 ROOT = Path(__file__).resolve().parent
@@ -282,16 +283,9 @@ class SettingsHttpTests(DatabaseCase):
             self.addCleanup(server.shutdown)
 
     def call(self, server, method, body=None, headers=None, raw=None):
-        import urllib.error
-        import urllib.request
         data = raw if raw is not None else (None if body is None else json.dumps(body).encode())
-        request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/settings", data=data, method=method,
-                                         headers=headers or {})
-        try:
-            with urllib.request.urlopen(request, timeout=5) as response:
-                return response.status, json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            return error.code, error.read()
+        status, answer = local_request(server.server_port, method, "/api/settings", data, headers)
+        return status, (json.loads(answer) if status < 300 else answer)
 
     GOOD = {"Content-Type": "application/json", "X-HA-Bandwidth-Settings": "1"}
 

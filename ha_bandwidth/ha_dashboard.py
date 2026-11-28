@@ -94,8 +94,10 @@ def provision_dashboard():
             app = supervisor_get("/addons/self/info")["data"]
             ingress = app["ingress_url"]
             config = dashboard_config(ingress)
-            # The Supervisor exposes its API proxy on the internal add-on network.
+            # De Supervisor biedt zijn API-proxy alleen aan op het interne add-onnetwerk (host "supervisor")
+            # en kent daar geen wss: het verkeer verlaat de host niet.
             socket = create_connection(
+                # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
                 "ws://supervisor/core/websocket", timeout=8,
                 http_no_proxy=["supervisor"], redirect_limit=0,
             )

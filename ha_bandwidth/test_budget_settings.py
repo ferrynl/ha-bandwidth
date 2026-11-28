@@ -2,10 +2,10 @@
 import json
 import threading
 import unittest
-import urllib.error
-import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
+
+from local_http import local_request
 
 import monitor
 from test_calibration_backup_cards import DatabaseCase, NOW
@@ -90,14 +90,9 @@ class BudgetSettingsHttpTests(DatabaseCase):
             self.addCleanup(server.shutdown)
 
     def call(self, server, path, body=None, headers=None):
-        request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}{path}",
-                                         data=None if body is None else json.dumps(body).encode(),
-                                         method="GET" if body is None else "POST", headers=headers or {})
-        try:
-            with urllib.request.urlopen(request, timeout=5) as response:
-                return response.status, json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            return error.code, None
+        status, raw = local_request(server.server_port, "GET" if body is None else "POST", path,
+                                    None if body is None else json.dumps(body).encode(), headers)
+        return status, (json.loads(raw) if status < 300 else None)
 
     def test_post_is_guarded_and_get_works(self):
         path = "/api/settings/budget-config"
