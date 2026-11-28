@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from zoneinfo import ZoneInfo
 
+from migrations import migrate
 from csv_export import CSV_COLUMNS, csv_safe, csv_text
 from ipinfo import fetch_ipinfo as lookup_ipinfo, public_ip, stored_ipinfo
 from periods import period_bounds, previous_period, previous_totals
@@ -210,32 +211,9 @@ def database():
 
 def initialize():
     DATA.mkdir(parents=True, exist_ok=True)
-    with closing(database()) as db, db:
-        db.executescript("""
-            PRAGMA journal_mode = WAL;
-            CREATE TABLE IF NOT EXISTS traffic (
-                hour TEXT, kind TEXT, source TEXT, label TEXT,
-                rx INTEGER NOT NULL, tx INTEGER NOT NULL,
-                PRIMARY KEY (hour, kind, source)
-            ) WITHOUT ROWID;
-            CREATE TABLE IF NOT EXISTS app_destinations (
-                app TEXT, day TEXT, ip TEXT, protocol INTEGER, port INTEGER, domain TEXT,
-                evidence TEXT, rx INTEGER NOT NULL, tx INTEGER NOT NULL,
-                PRIMARY KEY (app, day, ip, protocol, port, domain, evidence)
-            ) WITHOUT ROWID;
-            CREATE TABLE IF NOT EXISTS ipinfo_cache (
-                ip TEXT PRIMARY KEY, asn TEXT NOT NULL, as_name TEXT NOT NULL, as_domain TEXT NOT NULL
-            ) WITHOUT ROWID;
-            CREATE TABLE IF NOT EXISTS traffic_alerts (
-                timestamp TEXT NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL,
-                label TEXT NOT NULL DEFAULT '', bps INTEGER NOT NULL, baseline_bps INTEGER NOT NULL,
-                reason TEXT NOT NULL DEFAULT '', interval_start TEXT, leaders TEXT NOT NULL DEFAULT '{}',
-                PRIMARY KEY (timestamp, kind, source)
-            ) WITHOUT ROWID;
-            CREATE INDEX IF NOT EXISTS app_destinations_day ON app_destinations(day);
-            CREATE INDEX IF NOT EXISTS traffic_kind_hour ON traffic(kind, hour);
-            CREATE INDEX IF NOT EXISTS traffic_kind_source_hour ON traffic(kind, source, hour);
-        """)
+    with closing(database()) as db:
+        db.execute("PRAGMA journal_mode = WAL")
+        migrate(db)
 
 
 def choose_interface():
