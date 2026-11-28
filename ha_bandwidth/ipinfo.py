@@ -24,6 +24,8 @@ def stored_ipinfo(db, addresses):
     if not addresses:
         return {}
     placeholders = ", ".join("?" for _ in addresses)
+    # De SQL-tekst bestaat uit vaste stukken en één rij vraagtekens; de adressen gaan als parameters mee.
+    # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
     rows = db.execute(
         f"SELECT ip, asn, as_name, as_domain FROM ipinfo_cache WHERE ip IN ({placeholders})",
         tuple(addresses),

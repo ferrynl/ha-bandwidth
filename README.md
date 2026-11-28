@@ -167,3 +167,7 @@ Onder de grafiek staat **Exporteren als CSV**. Het bestand bevat de periode en b
 - Het bestand is UTF-8 met BOM. Staat je Excel op Nederlands en komt alles in één kolom terecht, kies dan *Gegevens → Uit tekst/CSV* en stel de scheidingsteken in op een komma.
 - Namen die met `=`, `+`, `-` of `@` beginnen krijgen een voorafgaande `'`, zodat een spreadsheet ze niet als formule uitvoert.
 - De bestemmingen van apps zitten niet in de export.
+
+## Beveiliging
+
+Wat de Semgrep-scan heeft gevonden, wat er is aangepast en welke meldingen bewust zijn onderdrukt staat in [docs/beveiliging-semgrep.md](docs/beveiliging-semgrep.md).

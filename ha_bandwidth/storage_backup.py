@@ -17,7 +17,19 @@ NULLABLE_COLUMNS = {"interval_start"}
 OPTIONAL_TABLES = {"ipinfo_cache", "traffic_alerts"}
 
 
+def identifier(name):
+    """Geef een tabel- of kolomnaam terug als die uit het vaste schema komt, anders een fout.
+
+    SQLite laat namen niet als parameter toe. Elke naam die in SQL-tekst belandt gaat hier langs,
+    zodat een bestand dat je uploadt nooit de vorm van een opdracht kan bepalen.
+    """
+    if name in TABLES or any(name in columns for columns in TABLES.values()):
+        return name
+    raise ValueError(f"Onbekende naam in het schema: {name!r}")
+
+
 def column_check(column):
+    column = identifier(column)
     kind = "integer" if column in INTEGER_COLUMNS else "text"
     if column in NULLABLE_COLUMNS:
         return f"typeof({column}) IN ('{kind}', 'null')"
@@ -44,31 +56,39 @@ def restore(connection, uploaded, rescue, previous):
             ).fetchone()
             if metadata is None and table != "traffic":
                 continue  # Older backups can omit newer tables.
-            schema = connection.execute(f"PRAGMA incoming.table_xinfo({table})").fetchall()
+            # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
+            schema = connection.execute(f"PRAGMA incoming.table_xinfo({identifier(table)})").fetchall()
             if not metadata or metadata[0] != "table" or tuple(row[1] for row in schema) != columns or any(row[6] for row in schema):
                 raise ValueError("Dit bestand bevat geen ondersteunde HA-Bandwidth-database.")
             expected = " AND ".join(column_check(column) for column in columns)
             if table == "traffic_alerts":
                 expected += " AND bps >= 0 AND baseline_bps >= 0 AND length(kind) <= 32 AND length(source) <= 250"
                 expected += " AND length(label) <= 250 AND length(reason) <= 1000 AND length(leaders) <= 100000"
+                # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
                 valid = connection.execute(
                     f"SELECT COALESCE(MIN({expected}), 1), 0 FROM incoming.traffic_alerts"
                 ).fetchone()
             elif table == "ipinfo_cache":
                 expected += " AND length(ip) BETWEEN 1 AND 45 AND length(asn) <= 250"
                 expected += " AND length(as_name) <= 250 AND length(as_domain) <= 250"
+                # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
                 valid = connection.execute(
                     f"SELECT COALESCE(MIN({expected}), 1), 0 FROM incoming.ipinfo_cache"
                 ).fetchone()
             else:
+                # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
                 valid = connection.execute(f"""
                     SELECT COALESCE(MIN(({expected}) AND rx >= 0 AND tx >= 0), 1),
                            COALESCE(SUM(CAST(rx AS REAL) + tx), 0)
-                    FROM incoming.{table}
+                    FROM incoming.{identifier(table)}
                 """).fetchone()
             if not valid[0] or not 0 <= valid[1] <= 9e18:
                 raise ValueError("De back-up bevat ongeldige meetgegevens.")
-            tables[table] = ", ".join(columns)
+            tables[table] = ", ".join(identifier(column) for column in columns)
 
         # SQLite readers can keep their snapshot while the write lock prevents new measurements.
         connection.execute("BEGIN IMMEDIATE")
@@ -80,10 +100,14 @@ def restore(connection, uploaded, rescue, previous):
             for table in TABLES:
                 if table in OPTIONAL_TABLES and table not in tables:
                     continue
-                connection.execute(f"DELETE FROM main.{table}")
+                # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
+                connection.execute(f"DELETE FROM main.{identifier(table)}")
                 if table in tables:
                     columns = tables[table]
-                    connection.execute(f"INSERT INTO main.{table} ({columns}) SELECT {columns} FROM incoming.{table}")
+                    # Namen komen uit het vaste schema (identifier()); SQLite staat namen niet als parameter toe.
+                    # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
+                    connection.execute(f"INSERT INTO main.{identifier(table)} ({columns}) SELECT {columns} FROM incoming.{identifier(table)}")
             rescue.replace(previous)
             connection.commit()
         except BaseException:

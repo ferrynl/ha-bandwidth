@@ -46,6 +46,16 @@ ZONE = ZoneInfo(SETTINGS.get("timezone", "Europe/Amsterdam"))
 STATUS = {}
 ROUTER_HOSTS = {}
 ROUTER_LINKS = {}
+# De bestanden van het dashboard staan vast. Ze worden één keer gelezen, zodat een verzoek nooit een pad
+# kiest: de URL is alleen een sleutel in deze tabel.
+STATIC_FILES = {
+    "/": ("dashboard.html", "text/html; charset=utf-8"),
+    "/lovelace.json": ("lovelace.json", "application/json"),
+    "/lovelace-card.js": ("lovelace-card.js", "text/javascript; charset=utf-8"),
+    "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
+    "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
+}
+STATIC_ASSETS = {route: ((ROOT / name).read_bytes(), kind) for route, (name, kind) in STATIC_FILES.items()}
 PERIODS = {"day": 13, "week": 10, "month": 10, "year": 7}
 
 
@@ -357,6 +367,8 @@ def export_csv(day, period, kind, source):
         sql += " AND source = ?"
         params.append(source)
     with closing(database()) as db:
+        # De SQL-tekst bestaat uit vaste stukken; alle waarden gaan als parameters mee.
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         rows = db.execute(sql + " GROUP BY bucket, kind, source ORDER BY bucket, kind, source", params).fetchall()
     return csv_text(rows)
 
@@ -714,6 +726,8 @@ def report(day, period, kind, source, now=None):
         if source:
             sql += " AND source = ?"
             params += (source,)
+        # De SQL-tekst bestaat uit vaste stukken; alle waarden gaan als parameters mee.
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         buckets = db.execute(sql + " GROUP BY bucket ORDER BY bucket", params).fetchall()
         first = db.execute("SELECT MIN(hour) FROM traffic").fetchone()[0]
         previous = previous_totals(db, day, period, kind, source, now, first)
@@ -725,6 +739,8 @@ def report(day, period, kind, source, now=None):
             else:
                 clause = "app = ?"
                 owner = source
+            # De SQL-tekst bestaat uit vaste stukken; alle waarden gaan als parameters mee.
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
             matching = db.execute(f"""
                 SELECT ip, protocol, port, domain, evidence, SUM(rx) AS rx, SUM(tx) AS tx
                 FROM app_destinations WHERE {clause} AND day >= ? AND day < ?
@@ -879,18 +895,11 @@ class Dashboard(BaseHTTPRequestHandler):
                 return
             self.reply(json.dumps(data).encode(), "application/json")
             return
-        assets = {
-            "/": ("dashboard.html", "text/html; charset=utf-8"),
-            "/lovelace.json": ("lovelace.json", "application/json"),
-            "/lovelace-card.js": ("lovelace-card.js", "text/javascript; charset=utf-8"),
-            "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
-            "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
-        }
-        if url.path not in assets:
+        asset = STATIC_ASSETS.get(url.path)
+        if asset is None:
             self.send_error(404)
             return
-        file, content_type = assets[url.path]
-        self.reply((ROOT / file).read_bytes(), content_type)
+        self.reply(*asset)
 
     def download_backup(self, previous):
         logging.info("Back-up: download aangevraagd (%s)", "herstelkopie" if previous else "nieuwe back-up")
@@ -921,7 +930,8 @@ class Dashboard(BaseHTTPRequestHandler):
             self.end_headers()
             with target.open("rb") as source:
                 try:
-                    shutil.copyfileobj(source, self.wfile)
+                    while chunk := source.read(64 * 1024):
+                        self.wfile.write(chunk)
                 except OSError:
                     logging.warning("Back-up: download afgebroken")
                     return

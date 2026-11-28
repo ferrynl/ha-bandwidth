@@ -5,8 +5,6 @@ import sqlite3
 import tempfile
 import threading
 import unittest
-import urllib.error
-import urllib.request
 from contextlib import closing
 from datetime import datetime
 from http.server import ThreadingHTTPServer
@@ -17,6 +15,7 @@ from zoneinfo import ZoneInfo
 import budget
 import ha_mqtt
 import monitor
+from local_http import local_request
 from storage_backup import restore, snapshot
 
 ZONE = ZoneInfo("Europe/Amsterdam")
@@ -154,13 +153,8 @@ class CalibrationHttpTests(DatabaseCase):
             self.addCleanup(server.shutdown)
 
     def post(self, server, body, headers):
-        request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/settings/budget",
-                                         data=json.dumps(body).encode(), method="POST", headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=5) as response:
-                return response.status, json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            return error.code, None
+        status, raw = local_request(server.server_port, "POST", "/api/settings/budget", json.dumps(body).encode(), headers)
+        return status, (json.loads(raw) if status < 300 else None)
 
     def test_calibration_over_http_is_guarded(self):
         self.assertEqual(self.post(self.direct, {"used_gb": 5}, self.GOOD)[0], 403)
