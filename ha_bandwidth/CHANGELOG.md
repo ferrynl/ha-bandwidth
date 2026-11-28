@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.2
+
+- Intern: het lezen, valideren en opslaan van instellingen staat in een eigen module zonder globale toestand. Het gedrag is gelijk gebleven.
+
 ## 0.14.1
 
 - De database heeft nu een versienummer en genummerde migraties. Bestaande installaties worden zonder gegevensverlies als versie 1 herkend. Een database die nieuwer is dan de app wordt niet aangeraakt: de app meldt dat in het logboek in plaats van gegevens te beschadigen.
